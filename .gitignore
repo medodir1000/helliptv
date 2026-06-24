@@ -1,0 +1,31 @@
+# dependencies
+node_modules
+
+# build
+dist
+dist-ssr
+
+# local env files — NEVER commit secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / os
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.local
+
+# vercel
+.vercel
+
+# downloaded design-reference site (3rd-party / not part of the product)
+inline-tv
+
+# image-optimization output preview / scratch
+*.tmp.png

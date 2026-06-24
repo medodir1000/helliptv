@@ -1,0 +1,277 @@
+@import 'tailwindcss';
+
+/* ════════════════════════════════════════════════════════════════
+   HellIPTV — Design System (Tailwind v4 @theme tokens)
+   "Underground premium": indigo-black canvas, neon purple + volt green
+   ════════════════════════════════════════════════════════════════ */
+@theme {
+  /* ── Light canvas & surfaces (matched to inline-iptv.com) ── */
+  --color-canvas: #f7f8fa; /* page background */
+  --color-canvas-2: #eeeff4; /* alt bands / footer */
+  --color-surface: #ffffff; /* cards */
+  --color-surface-2: #f5f5f8;
+  --color-surface-3: #ededf2;
+  --color-line: #e7e5ec; /* hairline borders */
+
+  /* ── Text ── */
+  --color-fg: #0e0e12; /* near-black */
+  --color-muted: #4a4d57; /* body grey */
+  --color-faint: #797d89; /* muted grey */
+
+  /* ── Accents (inline brand: purple + magenta + green) ── */
+  --color-neon: #720eec; /* signature purple */
+  --color-neon-2: #c000ff; /* magenta */
+  --color-neon-soft: #5a0bbf;
+  --color-volt: #16a34a; /* green */
+  --color-volt-2: #15803d;
+  --color-volt-deep: #166534;
+
+  /* ── Status ── */
+  --color-danger: #ef4444;
+  --color-warn: #f59e0b;
+
+  /* ── Typography ── */
+  --font-display: 'Roboto Slab', ui-serif, Georgia, serif;
+  --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* ── Radii ── */
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2.25rem;
+
+  /* ── Motion presets (Emil-Kowalski-style ease-out for entrances) ── */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Keyframe animations (utilities: animate-*) ── */
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-marquee-rev: marquee-rev 38s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 3.2s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.6s linear infinite;
+  --animate-aurora: aurora 18s ease-in-out infinite;
+  --animate-spin-slow: spin 22s linear infinite;
+  --animate-scan: scan 2.4s ease-in-out infinite;
+  --animate-ticker: ticker 1s steps(1) infinite;
+  --animate-sweep: sweep 3.4s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes marquee-rev {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes aurora {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(6%, -4%, 0) scale(1.12); }
+  66% { transform: translate3d(-5%, 5%, 0) scale(0.95); }
+}
+@keyframes scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(420%); opacity: 0; }
+}
+@keyframes ticker {
+  50% { opacity: 0.3; }
+}
+@keyframes sweep {
+  0% { transform: translateX(-160%) skewX(-14deg); }
+  55%, 100% { transform: translateX(260%) skewX(-14deg); }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Base layer
+   ════════════════════════════════════════════════════════════════ */
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
+  }
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    line-height: 1.08;
+  }
+  ::selection {
+    background: var(--color-neon);
+    color: #fff;
+  }
+  /* Slim neon scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-canvas); }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(var(--color-neon-soft), var(--color-neon-2));
+    border-radius: 999px;
+    border: 2px solid var(--color-canvas);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-neon);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Composite utility classes
+   ════════════════════════════════════════════════════════════════ */
+
+/* Frosted white surface */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(17, 19, 28, 0.07);
+  box-shadow: 0 10px 34px -22px rgba(17, 19, 28, 0.18);
+}
+.glass-strong {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid rgba(17, 19, 28, 0.08);
+  box-shadow: 0 16px 44px -24px rgba(17, 19, 28, 0.22);
+}
+
+/* Gradient text — dark → accent, used sparingly */
+.text-gradient {
+  background: linear-gradient(96deg, #241046 0%, #720eec 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-gradient-volt {
+  background: linear-gradient(96deg, #14532d 0%, #16a34a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glows — soft coloured drop-shadows on light */
+.glow-purple { box-shadow: 0 14px 30px -14px color-mix(in oklab, var(--color-neon) 50%, transparent); }
+.glow-volt { box-shadow: 0 14px 30px -14px color-mix(in oklab, var(--color-volt) 50%, transparent); }
+.text-glow-purple { text-shadow: none; }
+.text-glow-volt { text-shadow: none; }
+
+/* White card with subtle depth */
+.card {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgba(17, 19, 28, 0.04), 0 14px 30px -22px rgba(17, 19, 28, 0.14);
+}
+.card-hover { transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s; }
+.card-hover:hover {
+  border-color: color-mix(in oklab, var(--color-neon) 35%, transparent);
+  box-shadow: 0 4px 10px rgba(17, 19, 28, 0.05), 0 28px 50px -30px color-mix(in oklab, var(--color-neon) 42%, transparent);
+}
+
+/* Editorial section kicker (replaces eyebrow pills) */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+.kicker::before {
+  content: '';
+  height: 1px;
+  width: 1.75rem;
+  background: linear-gradient(90deg, transparent, var(--color-neon));
+}
+
+/* Animated conic border ring */
+.ring-conic {
+  position: relative;
+  isolation: isolate;
+}
+.ring-conic::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--angle, 0deg), transparent 0%, var(--color-neon) 25%, var(--color-volt) 50%, var(--color-neon-2) 75%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: -1;
+  animation: spin-conic 6s linear infinite;
+}
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes spin-conic {
+  to { --angle: 360deg; }
+}
+
+/* Faint blueprint grid */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(17, 19, 28, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 19, 28, 0.045) 1px, transparent 1px);
+  background-size: 58px 58px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 80%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 80%);
+}
+
+/* Marquee edge fade */
+.mask-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* Shimmer skeleton fill */
+.shimmer {
+  background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--color-neon) 22%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+}
+
+.font-mono-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Honour reduced-motion globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
