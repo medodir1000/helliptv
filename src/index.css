@@ -16,7 +16,7 @@
   /* ── Text ── */
   --color-fg: #0e0e12; /* near-black */
   --color-muted: #4a4d57; /* body grey */
-  --color-faint: #797d89; /* muted grey */
+  --color-faint: #686c78; /* muted grey — AA 4.8:1 on light */
 
   /* ── Accents (inline brand: purple + magenta + green) ── */
   --color-neon: #720eec; /* signature purple */
@@ -226,7 +226,6 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   z-index: -1;
-  animation: spin-conic 6s linear infinite;
 }
 @property --angle {
   syntax: '<angle>';

@@ -17,6 +17,8 @@ export function Logo({ className, withWordmark = true }: LogoProps) {
       src={withWordmark ? logoUrl : logoBolt}
       alt="HellIPTV"
       draggable={false}
+      width={withWordmark ? 515 : 118}
+      height={withWordmark ? 126 : 162}
       className={`select-none ${withWordmark ? `w-auto ${className ?? 'h-9'}` : 'max-h-full w-auto object-contain'}`}
     />
   )

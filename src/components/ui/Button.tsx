@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import { springSnappy } from '../anim/motion'
 
-const MotionLink = motion(Link)
+const MotionLink = motion.create(Link)
 
 type Variant = 'primary' | 'volt' | 'ghost' | 'outline'
 type Size = 'md' | 'lg'

@@ -73,6 +73,8 @@ function PosterTile({ poster, index }: { poster: Poster; index: number }) {
         src={poster.url}
         alt={`${poster.label} — stream in 4K on HellIPTV`}
         loading="lazy"
+        width={480}
+        height={720}
         className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover/card:scale-[1.05]"
       />
       <span

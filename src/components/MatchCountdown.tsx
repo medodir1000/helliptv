@@ -40,7 +40,7 @@ export function MatchCountdown() {
                 </span>
               )}
             </div>
-            <h3 className="mt-3 font-display text-2xl font-bold text-fg sm:text-3xl">
+            <h2 className="mt-3 font-display text-2xl font-bold text-fg sm:text-3xl">
               {headline ? (
                 <>
                   {headline.home} <span className="text-faint">vs</span> {headline.away}
@@ -48,7 +48,7 @@ export function MatchCountdown() {
               ) : (
                 'Big match incoming'
               )}
-            </h3>
+            </h2>
             <p className="mt-1 text-sm text-muted">{headline?.league ?? 'Live sport'} · Live in 4K on HellIPTV</p>
           </div>
 

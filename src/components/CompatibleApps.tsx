@@ -55,6 +55,8 @@ export function CompatibleApps() {
                   src={src}
                   alt=""
                   loading="lazy"
+                  width={96}
+                  height={96}
                   className={`object-contain ${isCenter ? 'h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]' : 'h-12 w-12'}`}
                 />
               </motion.div>

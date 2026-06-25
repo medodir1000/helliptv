@@ -38,6 +38,8 @@ export function TrustBar() {
               alt={`${l.name} — included with HellIPTV`}
               loading="lazy"
               draggable={false}
+              width={150}
+              height={46}
               className="h-6 w-auto shrink-0 select-none object-contain opacity-40 transition-opacity duration-300 [filter:brightness(0)] hover:opacity-70 sm:h-7"
             />
           ))}

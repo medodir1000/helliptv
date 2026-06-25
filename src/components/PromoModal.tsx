@@ -79,6 +79,8 @@ export function PromoModal() {
               src={promoImg}
               alt="HellIPTV free 12-hour 4K trial — unlimited movies and series, all devices, no commitment, cancel anytime."
               draggable={false}
+              width={800}
+              height={773}
               className="w-full select-none rounded-[1.6rem] shadow-[0_30px_90px_-20px_rgba(124,18,236,0.55)]"
             />
 
