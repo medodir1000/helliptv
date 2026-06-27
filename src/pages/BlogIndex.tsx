@@ -7,6 +7,7 @@ import { Icon } from '../components/ui/Icon'
 import { FinalCTA } from '../components/FinalCTA'
 import { useSeo } from '../hooks/useSeo'
 import { getPublishedPosts, type Post } from '../lib/blog'
+import { hasSupabase } from '../lib/supabase'
 import { fadeUp, inViewOnce, staggerContainer } from '../components/anim/motion'
 
 function fmtDate(s: string | null) {
@@ -71,9 +72,17 @@ export function BlogIndex() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!hasSupabase) {
+      setError('The blog isn’t connected yet — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then restart the dev server (or redeploy).')
+      return
+    }
+    let alive = true
+    // Don't let a hung request leave the page stuck on skeletons forever.
+    const timeout = setTimeout(() => alive && setError('Took too long to reach Supabase. Check your connection / env vars.'), 12000)
     getPublishedPosts()
-      .then(setPosts)
-      .catch((e) => setError(e?.message ?? 'Could not load posts'))
+      .then((p) => { if (alive) { clearTimeout(timeout); setPosts(p) } })
+      .catch((e) => { if (alive) { clearTimeout(timeout); setError(e?.message ?? 'Could not load posts') } })
+    return () => { alive = false; clearTimeout(timeout) }
   }, [])
 
   return (
