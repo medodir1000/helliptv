@@ -28,11 +28,13 @@ interface SeoOptions {
   description: string
   /** route path, e.g. "/pricing" */
   path: string
+  /** absolute image URL for social cards (og:image / twitter:image) */
+  image?: string
   noindex?: boolean
 }
 
 /** Per-route SEO: title, meta description, canonical, Open Graph & Twitter tags. */
-export function useSeo({ title, description, path, noindex }: SeoOptions) {
+export function useSeo({ title, description, path, image, noindex }: SeoOptions) {
   useEffect(() => {
     const fullTitle = title.includes('HellIPTV') ? title : `${title} · HellIPTV`
     const url = SITE + path
@@ -45,6 +47,10 @@ export function useSeo({ title, description, path, noindex }: SeoOptions) {
     upsertMeta('property', 'og:url', url)
     upsertMeta('name', 'twitter:title', fullTitle)
     upsertMeta('name', 'twitter:description', description)
+    if (image) {
+      upsertMeta('property', 'og:image', image)
+      upsertMeta('name', 'twitter:image', image)
+    }
     upsertLink('canonical', url)
-  }, [title, description, path, noindex])
+  }, [title, description, path, image, noindex])
 }

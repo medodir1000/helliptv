@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
   { label: 'Devices', dropdown: true },
   { label: 'Pricing', to: '/pricing' },
   { label: 'FAQ', to: '/faq' },
+  { label: 'Blog', to: '/blog' },
 ]
 
 const itemCls = 'rounded-full px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-fg'

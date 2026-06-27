@@ -13,6 +13,7 @@ import { CompatibleApps } from '../components/CompatibleApps'
 import { Pricing } from '../components/Pricing'
 import { Testimonials } from '../components/Testimonials'
 import { FAQ } from '../components/FAQ'
+import { BlogTeaser } from '../components/BlogTeaser'
 import { FinalCTA } from '../components/FinalCTA'
 
 export function Home() {
@@ -38,6 +39,7 @@ export function Home() {
       <Pricing />
       <Testimonials />
       <FAQ />
+      <BlogTeaser />
       <FinalCTA />
     </>
   )

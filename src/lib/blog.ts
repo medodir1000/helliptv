@@ -1,0 +1,115 @@
+import { supabase } from './supabase'
+
+export type PostStatus = 'draft' | 'published'
+
+export interface Post {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  body: string | null
+  cover_image: string | null
+  category: string | null
+  author: string | null
+  tags: string[] | null
+  status: PostStatus
+  meta_description: string | null
+  read_minutes: number | null
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PostInput = Partial<
+  Pick<
+    Post,
+    | 'slug' | 'title' | 'excerpt' | 'body' | 'cover_image' | 'category'
+    | 'author' | 'tags' | 'status' | 'meta_description' | 'read_minutes' | 'published_at'
+  >
+>
+
+const LIST_COLS = 'id,slug,title,excerpt,cover_image,category,author,tags,read_minutes,published_at,created_at'
+
+/* ── Public reads (RLS allows only published) ── */
+export async function getPublishedPosts(limit?: number): Promise<Post[]> {
+  let q = supabase
+    .from('landing_posts')
+    .select(LIST_COLS)
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+  if (limit) q = q.limit(limit)
+  const { data, error } = await q
+  if (error) throw error
+  return (data ?? []) as Post[]
+}
+
+export async function getPostBySlug(slug: string): Promise<Post | null> {
+  const { data, error } = await supabase
+    .from('landing_posts')
+    .select('*')
+    .eq('slug', slug)
+    .eq('status', 'published')
+    .maybeSingle()
+  if (error) throw error
+  return (data as Post) ?? null
+}
+
+/* ── Admin (requires an authenticated session; RLS enforces it) ── */
+export async function listAllPosts(): Promise<Post[]> {
+  const { data, error } = await supabase
+    .from('landing_posts')
+    .select('id,slug,title,status,category,updated_at,published_at')
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Post[]
+}
+
+export async function getPostById(id: string): Promise<Post | null> {
+  const { data, error } = await supabase.from('landing_posts').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return (data as Post) ?? null
+}
+
+export async function createPost(input: PostInput): Promise<Post> {
+  const { data, error } = await supabase.from('landing_posts').insert(input).select('*').single()
+  if (error) throw error
+  return data as Post
+}
+
+export async function updatePost(id: string, input: PostInput): Promise<Post> {
+  const { data, error } = await supabase.from('landing_posts').update(input).eq('id', id).select('*').single()
+  if (error) throw error
+  return data as Post
+}
+
+export async function deletePost(id: string): Promise<void> {
+  const { error } = await supabase.from('landing_posts').delete().eq('id', id)
+  if (error) throw error
+}
+
+/* ── Image upload → public URL in the "landing-blog" bucket ── */
+export async function uploadImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const safe = file.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)
+  const path = `${safe || 'image'}-${Math.round(performance.now())}.${ext}`
+  const { error } = await supabase.storage.from('landing-blog').upload(path, file, { upsert: false, cacheControl: '31536000' })
+  if (error) throw error
+  return supabase.storage.from('landing-blog').getPublicUrl(path).data.publicUrl
+}
+
+/* ── Helpers ── */
+export function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 70)
+}
+
+export function estimateReadMinutes(body: string): number {
+  const words = (body || '').trim().split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.round(words / 200))
+}
