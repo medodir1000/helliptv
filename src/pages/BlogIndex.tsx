@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Section } from '../components/ui/Section'
 import { Icon } from '../components/ui/Icon'
 import { FinalCTA } from '../components/FinalCTA'
 import { useSeo } from '../hooks/useSeo'
+import { useHreflang } from '../hooks/useHreflang'
 import { getPublishedPosts, type Post } from '../lib/blog'
 import { hasSupabase } from '../lib/supabase'
+import { currentLang, blogPath } from '../lib/i18n'
 import { fadeUp, inViewOnce, staggerContainer } from '../components/anim/motion'
 
 function fmtDate(s: string | null) {
@@ -15,11 +17,11 @@ function fmtDate(s: string | null) {
   return new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, lang }: { post: Post; lang: string }) {
   return (
     <motion.article variants={fadeUp}>
       <Link
-        to={`/blog/${post.slug}`}
+        to={blogPath(lang, post.slug)}
         className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-shadow hover:shadow-[0_24px_50px_-30px_rgba(17,19,28,0.45)]"
       >
         <div className="relative aspect-[16/9] overflow-hidden bg-surface-3">
@@ -63,11 +65,13 @@ function PostCard({ post }: { post: Post }) {
 }
 
 export function BlogIndex() {
+  const lang = currentLang(useLocation().pathname)
   useSeo({
     title: 'Blog — IPTV guides, tips & streaming news',
     description: 'How-to guides, setup tips and streaming news from HellIPTV — watch every match in 4K on any device.',
-    path: '/blog',
+    path: blogPath(lang),
   })
+  useHreflang()
   const [posts, setPosts] = useState<Post[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,13 +81,14 @@ export function BlogIndex() {
       return
     }
     let alive = true
+    setPosts(null)
     // Don't let a hung request leave the page stuck on skeletons forever.
     const timeout = setTimeout(() => alive && setError('Took too long to reach Supabase. Check your connection / env vars.'), 12000)
-    getPublishedPosts()
+    getPublishedPosts(undefined, lang)
       .then((p) => { if (alive) { clearTimeout(timeout); setPosts(p) } })
       .catch((e) => { if (alive) { clearTimeout(timeout); setError(e?.message ?? 'Could not load posts') } })
     return () => { alive = false; clearTimeout(timeout) }
-  }, [])
+  }, [lang])
 
   return (
     <>
@@ -133,7 +138,7 @@ export function BlogIndex() {
             className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
           >
             {posts.map((p) => (
-              <PostCard key={p.id} post={p} />
+              <PostCard key={p.id} post={p} lang={lang} />
             ))}
           </motion.div>
         )}

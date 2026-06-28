@@ -32,9 +32,10 @@ if (url && key) {
     const sb = createClient(url, key)
     const { data, error } = await sb
       .from('landing_posts')
-      .select('slug,updated_at,published_at')
+      .select('id,slug,updated_at,published_at')
       .eq('status', 'published')
     if (error) throw error
+    const postById = new Map((data ?? []).map((p) => [p.id, p]))
     for (const p of data ?? []) {
       urls.push({
         loc: `/blog/${p.slug}`,
@@ -43,7 +44,19 @@ if (url && key) {
         priority: '0.7',
       })
     }
-    console.log(`[sitemap] added ${data?.length ?? 0} published blog posts`)
+    // Localized article URLs (one per stored translation).
+    const { data: tr } = await sb.from('landing_post_translations').select('post_id,lang')
+    for (const t of tr ?? []) {
+      const p = postById.get(t.post_id)
+      if (!p) continue
+      urls.push({
+        loc: `/${t.lang}/blog/${p.slug}`,
+        lastmod: (p.updated_at || p.published_at || '').slice(0, 10) || today,
+        changefreq: 'weekly',
+        priority: '0.6',
+      })
+    }
+    console.log(`[sitemap] added ${data?.length ?? 0} posts + ${tr?.length ?? 0} localized URLs`)
   } catch (e) {
     console.warn('[sitemap] skipped blog posts —', e.message)
   }

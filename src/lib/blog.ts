@@ -32,7 +32,7 @@ export type PostInput = Partial<
 const LIST_COLS = 'id,slug,title,excerpt,cover_image,category,author,tags,read_minutes,published_at,created_at'
 
 /* ── Public reads (RLS allows only published) ── */
-export async function getPublishedPosts(limit?: number): Promise<Post[]> {
+export async function getPublishedPosts(limit?: number, lang = 'en'): Promise<Post[]> {
   let q = supabase
     .from('landing_posts')
     .select(LIST_COLS)
@@ -41,10 +41,21 @@ export async function getPublishedPosts(limit?: number): Promise<Post[]> {
   if (limit) q = q.limit(limit)
   const { data, error } = await q
   if (error) throw error
-  return (data ?? []) as Post[]
+  const posts = (data ?? []) as Post[]
+  if (lang === 'en' || posts.length === 0) return posts
+  const { data: tr } = await supabase
+    .from('landing_post_translations')
+    .select('post_id,title,excerpt')
+    .eq('lang', lang)
+    .in('post_id', posts.map((p) => p.id))
+  const m = new Map((tr ?? []).map((t) => [(t as any).post_id, t as any]))
+  return posts.map((p) => {
+    const t = m.get(p.id)
+    return t ? { ...p, title: t.title || p.title, excerpt: t.excerpt || p.excerpt } : p
+  })
 }
 
-export async function getRelatedPosts(excludeSlug: string, category: string | null, limit = 3): Promise<Post[]> {
+export async function getRelatedPosts(excludeSlug: string, category: string | null, limit = 3, lang = 'en'): Promise<Post[]> {
   const out: Post[] = []
   const seen = new Set<string>([excludeSlug])
   const pull = async (cat: string | null) => {
@@ -66,10 +77,20 @@ export async function getRelatedPosts(excludeSlug: string, category: string | nu
   }
   if (category) await pull(category) // prefer same category
   if (out.length < limit) await pull(null) // fill with latest
-  return out
+  if (lang === 'en' || out.length === 0) return out
+  const { data: tr } = await supabase
+    .from('landing_post_translations')
+    .select('post_id,title,excerpt')
+    .eq('lang', lang)
+    .in('post_id', out.map((p) => p.id))
+  const m = new Map((tr ?? []).map((t) => [(t as any).post_id, t as any]))
+  return out.map((p) => {
+    const t = m.get(p.id)
+    return t ? { ...p, title: t.title || p.title, excerpt: t.excerpt || p.excerpt } : p
+  })
 }
 
-export async function getPostBySlug(slug: string): Promise<Post | null> {
+export async function getPostBySlug(slug: string, lang = 'en'): Promise<Post | null> {
   const { data, error } = await supabase
     .from('landing_posts')
     .select('*')
@@ -77,7 +98,18 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     .eq('status', 'published')
     .maybeSingle()
   if (error) throw error
-  return (data as Post) ?? null
+  const post = (data as Post) ?? null
+  if (!post || lang === 'en') return post
+  const t = await getTranslation(post.id, lang)
+  return t
+    ? {
+        ...post,
+        title: t.title || post.title,
+        excerpt: t.excerpt || post.excerpt,
+        body: t.body || post.body,
+        meta_description: t.meta_description || post.meta_description,
+      }
+    : post
 }
 
 /* ── Admin (requires an authenticated session; RLS enforces it) ── */

@@ -1,8 +1,9 @@
-/* Build-time prerender for the blog: writes static HTML for /blog and every
-   published article with the correct <title>, meta, Open Graph, canonical and
-   JSON-LD baked in — so search engines AND social crawlers (which don't run
-   JS) get the real article, not the generic SPA shell. Also emits /feed.xml.
-   Needs Supabase env (Netlify); skips cleanly without it. */
+/* Build-time prerender for the blog — now multilingual. For every published
+   article it writes static HTML for English AND each language that has a stored
+   translation, with the correct <title>, meta, Open Graph, canonical, hreflang
+   alternates and JSON-LD baked in. Search + social crawlers (no JS) get the
+   real, localised article. Also emits /feed.xml. Needs Supabase env; skips
+   cleanly without it. */
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { marked } from 'marked'
@@ -15,6 +16,16 @@ if (!url || !key) {
 }
 
 const SITE = 'https://helliptv.com'
+// Mirror of src/lib/i18n.ts (kept inline — this script can't import .ts).
+const LANGS = [
+  { code: 'en', hreflang: 'en' }, { code: 'es', hreflang: 'es' }, { code: 'fr', hreflang: 'fr' },
+  { code: 'de', hreflang: 'de' }, { code: 'pt', hreflang: 'pt' }, { code: 'ar', hreflang: 'ar', dir: 'rtl' },
+  { code: 'it', hreflang: 'it' }, { code: 'nl', hreflang: 'nl' }, { code: 'tr', hreflang: 'tr' },
+  { code: 'pl', hreflang: 'pl' }, { code: 'ru', hreflang: 'ru' }, { code: 'hi', hreflang: 'hi' },
+  { code: 'vi', hreflang: 'vi' },
+]
+const blogPath = (lang, slug) => `${lang === 'en' ? '' : '/' + lang}/blog${slug ? '/' + slug : ''}`
+
 const esc = (s) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
@@ -33,7 +44,14 @@ function setMeta(html, attr, name, content) {
   return html.replace('</head>', `<meta ${attr}="${name}" content="${esc(content)}"/></head>`)
 }
 
-function renderPage({ title, description, canonical, image, type, publishedTime, jsonld, bodyHtml }) {
+function hreflangBlock(slug) {
+  return (
+    LANGS.map((l) => `<link rel="alternate" hreflang="${l.hreflang}" href="${SITE}${blogPath(l.code, slug)}"/>`).join('') +
+    `<link rel="alternate" hreflang="x-default" href="${SITE}${blogPath('en', slug)}"/>`
+  )
+}
+
+function renderPage({ title, description, canonical, image, type, publishedTime, jsonld, bodyHtml, slug }) {
   let html = template
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`)
   html = setMeta(html, 'name', 'description', description)
@@ -48,6 +66,7 @@ function renderPage({ title, description, canonical, image, type, publishedTime,
     image ? `<meta property="og:image" content="${esc(image)}"/>` : '',
     image ? `<meta name="twitter:image" content="${esc(image)}"/>` : '',
     publishedTime ? `<meta property="article:published_time" content="${publishedTime}"/>` : '',
+    hreflangBlock(slug),
     jsonld ? `<script type="application/ld+json">${jsonld}</script>` : '',
   ].filter(Boolean).join('')
   html = html.replace('</head>', extra + '</head>')
@@ -65,53 +84,70 @@ if (error) {
   console.warn('[prerender] query failed —', error.message)
   process.exit(0)
 }
+const { data: translations } = await sb
+  .from('landing_post_translations')
+  .select('post_id,lang,title,excerpt,body,meta_description')
+const trMap = new Map() // `${post_id}:${lang}` -> translation
+for (const t of translations ?? []) trMap.set(`${t.post_id}:${t.lang}`, t)
 
-const wrap = (inner) =>
-  `<main style="max-width:48rem;margin:0 auto;padding:7rem 1.25rem 4rem"><nav style="font-size:.8rem;color:#797d89;margin-bottom:1.5rem"><a href="/">Home</a> &rsaquo; <a href="/blog">Blog</a></nav>${inner}</main>`
+const wrap = (inner, dir) =>
+  `<main${dir ? ` dir="${dir}"` : ''} style="max-width:48rem;margin:0 auto;padding:7rem 1.25rem 4rem"><nav style="font-size:.8rem;color:#797d89;margin-bottom:1.5rem"><a href="/">Home</a> &rsaquo; <a href="/blog">Blog</a></nav>${inner}</main>`
 
 mkdirSync('dist/blog', { recursive: true })
+let count = 0
 
-// Individual articles
 for (const p of posts) {
-  const canonical = `${SITE}/blog/${p.slug}`
-  const description = p.meta_description || p.excerpt || ''
-  const jsonld = JSON.stringify({
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: p.title,
-    description,
-    image: p.cover_image ? [p.cover_image] : undefined,
-    datePublished: p.published_at || undefined,
-    dateModified: p.updated_at || p.published_at || undefined,
-    author: { '@type': 'Organization', name: p.author || 'HellIPTV' },
-    publisher: { '@type': 'Organization', name: 'HellIPTV' },
-    mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
-    keywords: (p.tags || []).join(', ') || undefined,
-  })
-  const body = wrap(
-    `<article class="prose prose-zinc">` +
-      (p.cover_image ? `<img src="${esc(p.cover_image)}" alt="${esc(p.title)}" style="border-radius:1rem"/>` : '') +
-      `<h1>${esc(p.title)}</h1>` +
-      marked.parse(p.body || '') +
-      `</article>`,
-  )
-  mkdirSync(`dist/blog/${p.slug}`, { recursive: true })
-  writeFileSync(
-    `dist/blog/${p.slug}/index.html`,
-    renderPage({
-      title: `${p.title} · HellIPTV`,
+  // English + every language with a stored translation.
+  const langs = ['en', ...LANGS.filter((l) => l.code !== 'en' && trMap.has(`${p.id}:${l.code}`)).map((l) => l.code)]
+  for (const code of langs) {
+    const L = LANGS.find((l) => l.code === code)
+    const tr = code === 'en' ? null : trMap.get(`${p.id}:${code}`)
+    const title = (tr?.title || p.title)
+    const description = (tr?.meta_description || tr?.excerpt || p.meta_description || p.excerpt || '')
+    const body = tr?.body || p.body || ''
+    const canonical = `${SITE}${blogPath(code, p.slug)}`
+    const jsonld = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: title,
       description,
-      canonical,
-      image: p.cover_image || undefined,
-      type: 'article',
-      publishedTime: p.published_at || undefined,
-      jsonld,
-      bodyHtml: body,
-    }),
-  )
+      inLanguage: code,
+      image: p.cover_image ? [p.cover_image] : undefined,
+      datePublished: p.published_at || undefined,
+      dateModified: p.updated_at || p.published_at || undefined,
+      author: { '@type': 'Organization', name: p.author || 'HellIPTV' },
+      publisher: { '@type': 'Organization', name: 'HellIPTV' },
+      mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+    })
+    const bodyHtml = wrap(
+      `<article class="prose prose-zinc">` +
+        (p.cover_image ? `<img src="${esc(p.cover_image)}" alt="${esc(title)}" style="border-radius:1rem"/>` : '') +
+        `<h1>${esc(title)}</h1>` +
+        marked.parse(body) +
+        `</article>`,
+      L?.dir,
+    )
+    const dir = blogPath(code, p.slug).replace(/^\//, '') // e.g. "es/blog/slug"
+    mkdirSync(`dist/${dir}`, { recursive: true })
+    writeFileSync(
+      `dist/${dir}/index.html`,
+      renderPage({
+        title: `${title} · HellIPTV`,
+        description,
+        canonical,
+        image: p.cover_image || undefined,
+        type: 'article',
+        publishedTime: p.published_at || undefined,
+        jsonld,
+        bodyHtml,
+        slug: p.slug,
+      }),
+    )
+    count++
+  }
 }
 
-// Blog index
+// English blog index (with hreflang to the localized indexes).
 const cards = posts
   .map(
     (p) =>
@@ -126,10 +162,11 @@ writeFileSync(
     canonical: `${SITE}/blog`,
     type: 'website',
     bodyHtml: wrap(`<h1>Guides, tips &amp; streaming news</h1>${cards}`),
+    slug: undefined,
   }),
 )
 
-// RSS feed
+// RSS feed (English).
 const rss =
   `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel>` +
   `<title>HellIPTV Blog</title><link>${SITE}/blog</link>` +
@@ -146,4 +183,4 @@ const rss =
   `</channel></rss>\n`
 writeFileSync('dist/feed.xml', rss)
 
-console.log(`[prerender] ${posts.length} articles + /blog + feed.xml`)
+console.log(`[prerender] ${count} localized article pages + /blog + feed.xml`)

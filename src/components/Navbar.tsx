@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Logo } from './ui/Logo'
 import { Button } from './ui/Button'
+import { LanguageSwitcher } from './ui/LanguageSwitcher'
 import { Icon, type IconName } from './ui/Icon'
 import { WA } from '../lib/whatsapp'
 import { DEVICES } from '../lib/devices'
@@ -92,7 +93,8 @@ export function Navbar() {
           )}
         </div>
 
-        <div className="hidden items-center gap-3 lg:flex">
+        <div className="hidden items-center gap-2 lg:flex">
+          <LanguageSwitcher />
           <Button href={WA.freeTrial} variant="volt" size="md" icon="whatsapp">
             Free 12h Trial
           </Button>

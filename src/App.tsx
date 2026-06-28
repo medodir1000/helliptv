@@ -38,6 +38,9 @@ export default function App() {
             <Route path="/devices/:slug" element={<DevicePage />} />
             <Route path="/blog" element={<BlogIndex />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
+            {/* language-prefixed blog (es, fr, de, …) */}
+            <Route path="/:lang/blog" element={<BlogIndex />} />
+            <Route path="/:lang/blog/:slug" element={<BlogPost />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

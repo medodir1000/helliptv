@@ -34,3 +34,17 @@ export const LANG_CODES = LANGS.map((l) => l.code)
 export function getLang(code?: string | null): Lang {
   return LANGS.find((l) => l.code === code) ?? LANGS[0]
 }
+
+/** The language implied by a path's first segment ("/es/blog" → "es"). */
+export function currentLang(pathname: string): string {
+  const seg = pathname.split('/')[1]
+  return seg && seg !== 'en' && LANG_CODES.includes(seg) ? seg : DEFAULT_LANG
+}
+
+/** Build a blog URL in a given language (English has no prefix). */
+export function blogPath(lang: string, slug?: string): string {
+  const base = lang === DEFAULT_LANG ? '/blog' : `/${lang}/blog`
+  return slug ? `${base}/${slug}` : base
+}
+
+export const SITE_URL = 'https://helliptv.com'

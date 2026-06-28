@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Section } from '../components/ui/Section'
@@ -9,7 +9,9 @@ import { Aurora } from '../components/ui/Aurora'
 import { FinalCTA } from '../components/FinalCTA'
 import { Reveal } from '../components/anim/Reveal'
 import { useSeo } from '../hooks/useSeo'
+import { useHreflang } from '../hooks/useHreflang'
 import { getPostBySlug, getRelatedPosts, type Post } from '../lib/blog'
+import { currentLang, blogPath, getLang, SITE_URL } from '../lib/i18n'
 import { WA } from '../lib/whatsapp'
 
 function fmtDate(s: string | null) {
@@ -19,6 +21,7 @@ function fmtDate(s: string | null) {
 
 export function BlogPost() {
   const { slug } = useParams()
+  const lang = currentLang(useLocation().pathname)
   const [post, setPost] = useState<Post | null | undefined>(undefined) // undefined = loading
   const [error, setError] = useState<string | null>(null)
   const [related, setRelated] = useState<Post[]>([])
@@ -26,17 +29,18 @@ export function BlogPost() {
   useEffect(() => {
     if (!slug) return
     setPost(undefined)
-    getPostBySlug(slug)
+    getPostBySlug(slug, lang)
       .then((p) => setPost(p))
       .catch((e) => setError(e?.message ?? 'Could not load this article'))
-  }, [slug])
+  }, [slug, lang])
 
   useSeo({
     title: post ? `${post.title}` : 'Article',
     description: post?.meta_description ?? post?.excerpt ?? 'HellIPTV blog',
-    path: `/blog/${slug ?? ''}`,
+    path: blogPath(lang, slug ?? ''),
     image: post?.cover_image ?? undefined,
   })
+  useHreflang(slug)
 
   // JSON-LD structured data (BlogPosting) — rich results + better understanding.
   useEffect(() => {
@@ -51,7 +55,8 @@ export function BlogPost() {
       dateModified: post.updated_at ?? post.published_at ?? undefined,
       author: { '@type': 'Organization', name: post.author ?? 'HellIPTV' },
       publisher: { '@type': 'Organization', name: 'HellIPTV' },
-      mainEntityOfPage: { '@type': 'WebPage', '@id': `https://helliptv.com/blog/${post.slug}` },
+      inLanguage: lang,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}${blogPath(lang, post.slug)}` },
       keywords: (post.tags ?? []).join(', ') || undefined,
     }
     document.getElementById('blog-jsonld')?.remove()
@@ -61,22 +66,22 @@ export function BlogPost() {
     el.textContent = JSON.stringify(ld)
     document.head.appendChild(el)
     return () => document.getElementById('blog-jsonld')?.remove()
-  }, [post])
+  }, [post, lang])
 
   // Related posts (internal links + dwell time)
   useEffect(() => {
     if (!post) return
-    getRelatedPosts(post.slug, post.category, 3)
+    getRelatedPosts(post.slug, post.category, 3, lang)
       .then(setRelated)
       .catch(() => {})
-  }, [post])
+  }, [post, lang])
 
   if (post === null || error) {
     return (
       <Section className="!py-32 text-center">
         <p className="font-display text-2xl font-bold text-fg">Article not found</p>
         <p className="mt-2 text-muted">{error ?? 'This post may have been moved or unpublished.'}</p>
-        <Button to="/blog" variant="outline" size="md" icon="arrow" className="mt-6">
+        <Button to={blogPath(lang)} variant="outline" size="md" icon="arrow" className="mt-6">
           Back to the blog
         </Button>
       </Section>
@@ -92,7 +97,7 @@ export function BlogPost() {
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-faint">
               <Link to="/" className="hover:text-fg">Home</Link>
               <Icon name="chevron" size={12} className="-rotate-90 text-line" />
-              <Link to="/blog" className="hover:text-fg">Blog</Link>
+              <Link to={blogPath(lang)} className="hover:text-fg">Blog</Link>
             </nav>
 
             {post === undefined ? (
@@ -147,7 +152,10 @@ export function BlogPost() {
               ))}
             </div>
           ) : (
-            <div className="prose prose-zinc max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-neon prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-img:ring-1 prose-img:ring-line prose-blockquote:border-l-neon">
+            <div
+              dir={getLang(lang).dir}
+              className="prose prose-zinc max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-neon prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-img:ring-1 prose-img:ring-line prose-blockquote:border-l-neon"
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body ?? ''}</ReactMarkdown>
             </div>
           )}
@@ -170,7 +178,7 @@ export function BlogPost() {
           </div>
 
           <div className="mt-8">
-            <Button to="/blog" variant="ghost" size="md" icon="arrow">
+            <Button to={blogPath(lang)} variant="ghost" size="md" icon="arrow">
               More articles
             </Button>
           </div>
@@ -185,7 +193,7 @@ export function BlogPost() {
               {related.map((r) => (
                 <Link
                   key={r.id}
-                  to={`/blog/${r.slug}`}
+                  to={blogPath(lang, r.slug)}
                   className="group rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-[0_20px_44px_-28px_rgba(17,19,28,0.45)]"
                 >
                   {r.category && <span className="text-xs font-semibold uppercase tracking-wider text-neon">{r.category}</span>}
