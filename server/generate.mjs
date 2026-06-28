@@ -143,6 +143,10 @@ export async function generateImage(env, { prompt, query, size } = {}) {
     try { return await viaPexels(env.PEXELS_API_KEY, query || prompt) }
     catch (e) { errors.push(`Pexels: ${String(e?.message || e).slice(0, 80)}`) }
   }
+  // keyless + topic-relevant (CC0 search) — matches the article
+  try { return await viaOpenverse(query || prompt) }
+  catch (e) { errors.push(`Openverse: ${String(e?.message || e).slice(0, 80)}`) }
+  // last resort: keyless but generic
   try { return await viaPicsum(query || prompt) }
   catch (e) { errors.push(`Picsum: ${String(e?.message || e).slice(0, 80)}`) }
   throw new Error(errors.join(' | ') || 'Image generation failed')
@@ -150,12 +154,14 @@ export async function generateImage(env, { prompt, query, size } = {}) {
 
 async function imageToB64(url) {
   let r
-  try { r = await fetch(url, { redirect: 'follow' }) }
+  try { r = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (HellIPTV blog image fetch)' } }) }
   catch (e) { throw new Error(`fetch failed: ${e?.message || e}`) }
   if (!r.ok) throw new Error(`fetch ${r.status}`)
   const mime = (r.headers.get('content-type') || 'image/jpeg').split(';')[0]
+  if (!/^image\//.test(mime)) throw new Error(`not an image (${mime})`)
   const buf = Buffer.from(await r.arrayBuffer())
   if (buf.length < 1024) throw new Error('empty image')
+  if (buf.length > 4_500_000) throw new Error('image too large')
   return { b64: buf.toString('base64'), mime }
 }
 
@@ -207,6 +213,29 @@ async function viaPexels(key, query) {
   const pick = photos[Math.floor((Date.now() / 997) % photos.length)] || photos[0]
   const out = await imageToB64(pick.src.large2x || pick.src.large || pick.src.original)
   return { ...out, source: 'pexels' }
+}
+
+async function viaOpenverse(query) {
+  const q = String(query || 'television streaming').replace(/[^a-z0-9 ]/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'television'
+  // license_type=commercial → broader pool that allows commercial use; prefer the
+  // proxied thumbnail (sized JPEG) so we never choke on a multi-MB original.
+  const r = await fetch(
+    `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=20&license_type=commercial&mature=false`,
+    { headers: { 'User-Agent': 'HellIPTV/1.0 (+https://helliptv.com)' } },
+  )
+  if (!r.ok) throw new Error(`Openverse (${r.status})`)
+  const data = await r.json()
+  const results = (data?.results || []).filter((x) => x?.thumbnail || x?.url)
+  if (!results.length) throw new Error('no results')
+  const start = Math.floor((Date.now() / 700) % results.length)
+  for (let k = 0; k < Math.min(10, results.length); k++) {
+    const pick = results[(start + k) % results.length]
+    // proxied thumbnail first (always sized & alive), full-size as fallback
+    for (const src of [pick.thumbnail, pick.url].filter(Boolean)) {
+      try { return { ...(await imageToB64(src)), source: 'openverse' } } catch { /* dead/huge → next */ }
+    }
+  }
+  throw new Error('all picks failed')
 }
 
 async function viaPicsum(seedText) {
