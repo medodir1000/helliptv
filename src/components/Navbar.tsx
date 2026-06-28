@@ -93,21 +93,23 @@ export function Navbar() {
           )}
         </div>
 
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="flex items-center gap-2">
+          {/* always visible — mobile + desktop */}
           <LanguageSwitcher />
-          <Button href={WA.freeTrial} variant="volt" size="md" icon="whatsapp">
-            Free 12h Trial
-          </Button>
+          <div className="hidden lg:block">
+            <Button href={WA.freeTrial} variant="volt" size="md" icon="whatsapp">
+              Free 12h Trial
+            </Button>
+          </div>
+          <button
+            className="grid h-10 w-10 place-items-center rounded-xl glass text-fg lg:hidden"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+          >
+            <Icon name={open ? 'close' : 'menu'} size={22} />
+          </button>
         </div>
-
-        <button
-          className="grid h-10 w-10 place-items-center rounded-xl glass text-fg lg:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open}
-        >
-          <Icon name={open ? 'close' : 'menu'} size={22} />
-        </button>
       </motion.nav>
 
       <AnimatePresence>
