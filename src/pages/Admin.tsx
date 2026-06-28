@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import { supabase, hasSupabase } from '../lib/supabase'
 import {
   listAllPosts, getPostById, createPost, updatePost, deletePost, uploadImage,
   slugify, estimateReadMinutes, translateArticle, saveTranslation, getTranslatedLangs,
+  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl,
   type Post, type PostInput, type PostStatus,
 } from '../lib/blog'
 import { TRANSLATE_LANGS } from '../lib/i18n'
@@ -168,7 +170,7 @@ function TranslationsPanel({ id, form }: { id: string; form: PostInput }) {
           {busy === 'all' ? 'Translating…' : 'Translate all'}
         </button>
       </div>
-      <p className="mt-1.5 text-xs text-faint">Translates the current article (Gemini). Click a language to (re)do just that one.</p>
+      <p className="mt-1.5 text-xs text-faint">Translates the current article. Click a language to (re)do just that one.</p>
       {error && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {TRANSLATE_LANGS.map((l) => {
@@ -200,6 +202,46 @@ function TranslationsPanel({ id, form }: { id: string; form: PostInput }) {
 /* ────────────────────────────── Editor ───────────────────────────── */
 const EMPTY: PostInput = { title: '', slug: '', excerpt: '', body: '', category: '', author: 'HellIPTV Team', tags: [], status: 'draft', cover_image: '', meta_description: '', focus_keyword: '' }
 
+/* Drop generated images into the Markdown body — before spread-out "## " headings,
+   leftovers appended at the end. */
+function insertImages(body: string, items: { url: string; alt?: string }[]): string {
+  if (!items.length) return body
+  const md = (it: { url: string; alt?: string }) =>
+    `![${(it.alt || 'IPTV illustration').replace(/[[\]]/g, '').slice(0, 90)}](${it.url})`
+  const lines = body.split('\n')
+  const heads: number[] = []
+  for (let i = 0; i < lines.length; i++) if (/^##\s/.test(lines[i])) heads.push(i)
+  const slots: number[] = []
+  if (heads.length >= 2) slots.push(heads[1])
+  if (heads.length >= 4) slots.push(heads[3])
+  else if (heads.length >= 3) slots.push(heads[2])
+  const placed = Math.min(slots.length, items.length)
+  const ordered = slots
+    .slice(0, placed)
+    .map((at, k) => ({ at, it: items[k] }))
+    .sort((a, b) => b.at - a.at)
+  for (const { at, it } of ordered) lines.splice(at, 0, '', md(it), '')
+  let out = lines.join('\n')
+  if (placed < items.length) out += '\n\n' + items.slice(placed).map(md).join('\n\n') + '\n'
+  return out
+}
+
+function ToolBtn({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={(e) => e.preventDefault()} // keep the textarea selection
+      onClick={onClick}
+      className="grid h-7 min-w-[1.75rem] place-items-center rounded-md px-1.5 text-[13px] font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+    >
+      {children}
+    </button>
+  )
+}
+
+const toolSelect = 'h-7 rounded-md border border-line bg-surface px-1.5 text-xs text-muted outline-none hover:border-neon/40'
+
 function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   const [form, setForm] = useState<PostInput>(EMPTY)
   const [tagsText, setTagsText] = useState('')
@@ -209,6 +251,11 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const coverInput = useRef<HTMLInputElement>(null)
   const bodyInput = useRef<HTMLInputElement>(null)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const [aiTopic, setAiTopic] = useState('')
+  const [aiBusy, setAiBusy] = useState<'article' | 'images' | 'all' | null>(null)
+  const [aiStatus, setAiStatus] = useState<string | null>(null)
+  const [imgPrompts, setImgPrompts] = useState<string[] | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -240,6 +287,143 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
     setBusy(false)
   }
 
+  /* AI: write a full structured article, then auto-format it. */
+  const genArticle = async () => {
+    const topic = (aiTopic || form.title || '').trim()
+    setAiBusy('article'); setError(null); setAiStatus('Writing the article… (~20s)')
+    try {
+      const a = await generateArticle({ topic, keyword: form.focus_keyword || '' })
+      const body = formatArticle(a.body || '', a.focus_keyword || form.focus_keyword || '')
+      setForm((f) => ({
+        ...f,
+        title: a.title || f.title,
+        slug: slugLocked && f.slug ? f.slug : slugify(a.slug || a.title || f.title || 'post'),
+        excerpt: a.excerpt || f.excerpt,
+        body,
+        meta_description: a.meta_description || f.meta_description,
+        focus_keyword: a.focus_keyword || f.focus_keyword,
+        category: a.category || f.category,
+        tags: a.tags?.length ? a.tags : f.tags,
+      }))
+      if (a.tags?.length) setTagsText(a.tags.join(', '))
+      if (a.image_prompts?.length) setImgPrompts(a.image_prompts.slice(0, 3))
+      setAiStatus(null)
+    } catch (e: any) {
+      setError(e?.message || 'Article generation failed'); setAiStatus(null)
+    }
+    setAiBusy(null)
+  }
+
+  /* AI: 3 related images → cover + in-body, uploaded to storage. */
+  const genImages = async () => {
+    if (!form.title && !form.body) { setError('Add a title or generate an article first.'); return }
+    setAiBusy('images'); setError(null)
+    try {
+      let prompts = imgPrompts
+      if (!prompts?.length) {
+        setAiStatus('Thinking up 3 scenes…')
+        prompts = await getImagePrompts({ title: form.title, excerpt: form.excerpt, body: form.body })
+      }
+      const hadCover = !!form.cover_image
+      const urls: string[] = []
+      for (let i = 0; i < prompts.length; i++) {
+        setAiStatus(`Generating image ${i + 1}/${prompts.length}… (~20s each)`)
+        const dataUrl = await generateImage(prompts[i])
+        setAiStatus(`Uploading image ${i + 1}/${prompts.length}…`)
+        urls.push(await uploadImageFromUrl(dataUrl, `${slugify(form.title || 'image')}-${i + 1}`))
+      }
+      const bodyUrls = hadCover ? urls : urls.slice(1)
+      const bodyAlts = hadCover ? prompts : prompts.slice(1)
+      setForm((f) => ({
+        ...f,
+        cover_image: f.cover_image || urls[0],
+        body: insertImages(f.body || '', bodyUrls.map((u, i) => ({ url: u, alt: bodyAlts[i] }))),
+      }))
+      setImgPrompts(null)
+      setAiStatus(null)
+    } catch (e: any) {
+      setError(e?.message || 'Image generation failed'); setAiStatus(null)
+    }
+    setAiBusy(null)
+  }
+
+  /* AI: full SEO article + cover image + 2 in-body images — all from the title, one click. */
+  const genEverything = async () => {
+    const topic = (aiTopic || form.title || '').trim()
+    if (!topic) { setError('Type a title or topic first.'); return }
+    setAiBusy('all'); setError(null)
+    let articleDone = false
+    try {
+      setAiStatus('Writing a long, SEO-optimized article… (~30s)')
+      const a = await generateArticle({ topic, keyword: form.focus_keyword || '' })
+      const body0 = formatArticle(a.body || '', a.focus_keyword || form.focus_keyword || '')
+      setForm((f) => ({
+        ...f,
+        title: a.title || f.title,
+        slug: slugLocked && f.slug ? f.slug : slugify(a.slug || a.title || f.title || 'post'),
+        excerpt: a.excerpt || f.excerpt,
+        body: body0,
+        meta_description: a.meta_description || f.meta_description,
+        focus_keyword: a.focus_keyword || f.focus_keyword,
+        category: a.category || f.category,
+        tags: a.tags?.length ? a.tags : f.tags,
+      }))
+      if (a.tags?.length) setTagsText(a.tags.join(', '))
+      articleDone = true
+
+      const prompts = a.image_prompts?.length
+        ? a.image_prompts.slice(0, 3)
+        : await getImagePrompts({ title: a.title, excerpt: a.excerpt, body: a.body })
+      const urls: string[] = []
+      for (let i = 0; i < prompts.length; i++) {
+        setAiStatus(`Generating image ${i + 1}/${prompts.length}… (~20s each)`)
+        const dataUrl = await generateImage(prompts[i])
+        urls.push(await uploadImageFromUrl(dataUrl, `${slugify(a.title || 'image')}-${i + 1}`))
+      }
+      setForm((f) => ({
+        ...f,
+        cover_image: urls[0] || f.cover_image,
+        body: insertImages(body0, urls.slice(1).map((u, i) => ({ url: u, alt: prompts[i + 1] }))),
+      }))
+      setAiStatus(null)
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed'
+      setError(articleDone ? `Article created ✓ — images failed: ${msg}. Fix the OpenAI key, then click “Images only”.` : msg)
+      setAiStatus(null)
+    }
+    setAiBusy(null)
+  }
+
+  /* ── Body formatting toolbar (operates on the textarea selection) ── */
+  const editBody = (fn: (sel: string, before: string, after: string) => { body: string; start: number; end: number }) => {
+    const ta = bodyRef.current
+    const full = form.body || ''
+    const s = ta?.selectionStart ?? full.length
+    const e = ta?.selectionEnd ?? full.length
+    const r = fn(full.slice(s, e), full.slice(0, s), full.slice(e))
+    set({ body: r.body })
+    requestAnimationFrame(() => { ta?.focus(); ta?.setSelectionRange(r.start, r.end) })
+  }
+  const wrap = (open: string, close: string, ph = 'text') =>
+    editBody((sel, before, after) => {
+      const inner = sel || ph
+      const start = before.length + open.length
+      return { body: before + open + inner + close + after, start, end: start + inner.length }
+    })
+  const prefixLines = (prefix: string) =>
+    editBody((sel, before, after) => {
+      const block = (sel || 'text').split('\n').map((l) => prefix + l.replace(/^\s*(?:#{1,6}\s+|[-*]\s+|>\s+)/, '')).join('\n')
+      return { body: before + block + after, start: before.length, end: before.length + block.length }
+    })
+  const alignBlock = (align: string) =>
+    editBody((sel, before, after) => {
+      const inner = sel || 'text'
+      const open = `<div style="text-align:${align}">\n\n`
+      const start = before.length + open.length
+      return { body: before + open + inner + '\n\n</div>\n' + after, start, end: start + inner.length }
+    })
+  const styleWrap = (css: string) => wrap(`<span style="${css}">`, '</span>')
+
   const save = async (status: PostStatus) => {
     setBusy(true); setError(null)
     try {
@@ -268,6 +452,44 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       </button>
 
       <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
+        {/* ── AI Studio ── */}
+        <div className="mb-6 rounded-2xl border border-neon/30 bg-neon/5 p-4">
+          <div className="flex items-center gap-2">
+            <Icon name="sparkles" size={15} className="text-neon" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-neon">AI Studio</span>
+          </div>
+          <p className="mt-1.5 text-xs text-faint">
+            Type a title → a long, SEO-ready article <span className="font-semibold text-muted">plus</span> 3 images (cover + 2 in-article), in one click.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={aiTopic}
+              onChange={(e) => setAiTopic(e.target.value)}
+              className={input}
+              placeholder="Article title, e.g. “Best IPTV for Firestick in 2026” — or leave blank to use the Title field"
+            />
+            <button type="button" disabled={!!aiBusy || busy} onClick={genEverything} className={`${btnPrimary} shrink-0`}>
+              <Icon name="sparkles" size={15} /> {aiBusy === 'all' ? 'Generating…' : 'Generate article + images'}
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            <span className="text-faint">or just:</span>
+            <button type="button" disabled={!!aiBusy || busy} onClick={genArticle} className="font-semibold text-neon hover:underline disabled:opacity-50">
+              {aiBusy === 'article' ? 'Writing…' : 'Article only'}
+            </button>
+            <span className="text-faint">·</span>
+            <button type="button" disabled={!!aiBusy || busy} onClick={genImages} className="font-semibold text-neon hover:underline disabled:opacity-50">
+              {aiBusy === 'images' ? 'Generating…' : 'Images only'}
+            </button>
+            {aiStatus && (
+              <span className="inline-flex items-center gap-1.5 text-neon">
+                <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                {aiStatus}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div>
           <label className={label}>Title</label>
           <input value={form.title ?? ''} onChange={(e) => onTitle(e.target.value)} className={input} placeholder="Article title" />
@@ -330,10 +552,43 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
             </div>
           </div>
           {tab === 'write' ? (
-            <textarea value={form.body ?? ''} onChange={(e) => set({ body: e.target.value })} rows={16} className={`${input} resize-y font-mono-nums`} placeholder={'## Heading\n\nWrite in **Markdown**. Use the “+ Image” button to upload pictures.'} />
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-1 rounded-xl border border-line bg-canvas/40 p-1.5">
+                <ToolBtn onClick={() => wrap('**', '**', 'bold')} title="Bold"><b>B</b></ToolBtn>
+                <ToolBtn onClick={() => wrap('*', '*', 'italic')} title="Italic"><span className="italic">I</span></ToolBtn>
+                <span className="mx-0.5 h-5 w-px bg-line" />
+                <ToolBtn onClick={() => prefixLines('## ')} title="Heading">H2</ToolBtn>
+                <ToolBtn onClick={() => prefixLines('### ')} title="Subheading">H3</ToolBtn>
+                <ToolBtn onClick={() => prefixLines('- ')} title="Bullet list">• List</ToolBtn>
+                <ToolBtn onClick={() => prefixLines('> ')} title="Quote">❝</ToolBtn>
+                <span className="mx-0.5 h-5 w-px bg-line" />
+                <ToolBtn onClick={() => alignBlock('left')} title="Align left">⇤</ToolBtn>
+                <ToolBtn onClick={() => alignBlock('center')} title="Center text">↔</ToolBtn>
+                <ToolBtn onClick={() => alignBlock('right')} title="Align right">⇥</ToolBtn>
+                <span className="mx-0.5 h-5 w-px bg-line" />
+                <select defaultValue="" title="Text size" onChange={(e) => { if (e.target.value) styleWrap(`font-size:${e.target.value}`); e.currentTarget.value = '' }} className={toolSelect}>
+                  <option value="" disabled>Size</option>
+                  <option value="0.85em">Small</option>
+                  <option value="1.25em">Large</option>
+                  <option value="1.6em">Huge</option>
+                </select>
+                <select defaultValue="" title="Font / typography" onChange={(e) => { if (e.target.value) styleWrap(`font-family:${e.target.value}`); e.currentTarget.value = '' }} className={toolSelect}>
+                  <option value="" disabled>Font</option>
+                  <option value="Georgia, 'Times New Roman', serif">Serif</option>
+                  <option value="system-ui, sans-serif">Sans</option>
+                  <option value="'Courier New', ui-monospace, monospace">Mono</option>
+                </select>
+                <span className="mx-0.5 h-5 w-px bg-line" />
+                {['#e11d48', '#f59e0b', '#10b981', '#3b82f6', '#a855f7'].map((c) => (
+                  <button key={c} type="button" title={`Color ${c}`} onMouseDown={(ev) => ev.preventDefault()} onClick={() => styleWrap(`color:${c}`)} style={{ backgroundColor: c }} className="h-6 w-6 rounded-md ring-1 ring-inset ring-line" />
+                ))}
+                <input type="color" title="Custom color" onChange={(e) => styleWrap(`color:${e.target.value}`)} className="h-6 w-7 cursor-pointer rounded-md border border-line bg-surface p-0.5" />
+              </div>
+              <textarea ref={bodyRef} value={form.body ?? ''} onChange={(e) => set({ body: e.target.value })} rows={16} className={`${input} resize-y font-mono-nums`} placeholder={'## Heading\n\nWrite in **Markdown** — then select text and use the toolbar to center it, change color, size or font.'} />
+            </div>
           ) : (
             <div className="prose prose-zinc min-h-[16rem] max-w-none rounded-xl border border-line bg-canvas/40 p-4 prose-headings:font-display prose-a:text-neon prose-img:rounded-xl">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{form.body || '_Nothing to preview yet._'}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{form.body || '_Nothing to preview yet._'}</ReactMarkdown>
             </div>
           )}
         </div>

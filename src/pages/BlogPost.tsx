@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import { Section } from '../components/ui/Section'
 import { Icon } from '../components/ui/Icon'
 import { Button } from '../components/ui/Button'
@@ -156,7 +157,7 @@ export function BlogPost() {
               dir={getLang(lang).dir}
               className="prose prose-zinc max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-neon prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-img:ring-1 prose-img:ring-line prose-blockquote:border-l-neon"
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body ?? ''}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{post.body ?? ''}</ReactMarkdown>
             </div>
           )}
 

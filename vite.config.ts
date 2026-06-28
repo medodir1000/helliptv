@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { getFixtures } from './server/sportsFixtures'
 import { translateFields } from './server/translate.mjs'
+import { generateArticle, imagePrompts, generateImage } from './server/generate.mjs'
 
 /* ────────────────────────────────────────────────────────────────
    Shared helpers (server-side only — never bundled to the client)
@@ -71,6 +72,42 @@ function apiDevServer(env: Record<string, string>): Plugin {
           sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Translation failed' })
         }
       })
+
+      // ── POST /api/generate-article (OpenRouter — writes a full structured article) ──
+      server.middlewares.use('/api/generate-article', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJsonBody(req)
+          const out = await generateArticle(merged, body)
+          sendJson(res, 200, out)
+        } catch (err: any) {
+          sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Article generation failed' })
+        }
+      })
+
+      // ── POST /api/image-prompts (OpenRouter — 3 image prompts for an article) ──
+      server.middlewares.use('/api/image-prompts', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJsonBody(req)
+          const prompts = await imagePrompts(merged, body)
+          sendJson(res, 200, { prompts })
+        } catch (err: any) {
+          sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Could not build image prompts' })
+        }
+      })
+
+      // ── POST /api/generate-image (OpenAI Images — one image, base64) ──
+      server.middlewares.use('/api/generate-image', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJsonBody(req)
+          const out = await generateImage(merged, body)
+          sendJson(res, 200, out)
+        } catch (err: any) {
+          sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Image generation failed' })
+        }
+      })
     },
   }
 }
@@ -110,6 +147,7 @@ export default defineConfig(({ mode }) => {
         '@supabase/supabase-js',
         'react-markdown',
         'remark-gfm',
+        'rehype-raw',
       ],
       noDiscovery: true,
     },

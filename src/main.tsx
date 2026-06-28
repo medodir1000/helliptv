@@ -18,4 +18,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       /* non-fatal: app still works without SW */
     })
   })
+} else if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  // Dev safety net: remove any service worker left over from a past production
+  // build on this origin. Otherwise it serves a stale cached bundle that hides
+  // code changes and breaks HMR (this caused real "my changes aren't showing" pain).
+  navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()))
 }

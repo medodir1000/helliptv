@@ -47,23 +47,34 @@ function parseJson(text) {
 async function viaOpenRouter(key, model, prompt) {
   const m = model || 'meta-llama/llama-3.3-70b-instruct:free'
   let lastErr = 'OpenRouter failed'
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://helliptv.com',
-        'X-Title': 'HellIPTV',
-      },
-      body: JSON.stringify({ model: m, messages: [{ role: 'user', content: prompt }], temperature: 0.3 }),
-    })
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let r
+    try {
+      r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://helliptv.com',
+          'X-Title': 'HellIPTV',
+        },
+        body: JSON.stringify({ model: m, messages: [{ role: 'user', content: prompt }], temperature: 0.3 }),
+      })
+    } catch (e) {
+      // Retry transient network drops (Avast/AV TLS interception terminates Node HTTPS).
+      lastErr = e?.message || String(e)
+      if (attempt < 3 && /fetch failed|terminated|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|socket/i.test(lastErr)) {
+        await new Promise((s) => setTimeout(s, 1500 * (attempt + 1)))
+        continue
+      }
+      throw new Error(lastErr)
+    }
     const data = await r.json()
     if (r.ok && !data?.error) return parseJson(data?.choices?.[0]?.message?.content || '{}')
     const msg = data?.error?.message || `OpenRouter error (${r.status})`
     lastErr = msg
     // Retry transient upstream rate-limits (common on :free models).
-    if ((r.status === 429 || /rate.?limit/i.test(msg)) && attempt < 2) {
+    if ((r.status === 429 || /rate.?limit/i.test(msg)) && attempt < 3) {
       await new Promise((s) => setTimeout(s, 1500 * (attempt + 1)))
       continue
     }

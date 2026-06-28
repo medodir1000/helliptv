@@ -201,6 +201,63 @@ export async function uploadImage(file: File): Promise<string> {
   return supabase.storage.from('landing-blog').getPublicUrl(path).data.publicUrl
 }
 
+/* Download a data:/remote image URL and upload it to the bucket → public URL. */
+export async function uploadImageFromUrl(url: string, name = 'ai-image'): Promise<string> {
+  const blob = await (await fetch(url)).blob()
+  const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+  const file = new File([blob], `${slugify(name) || 'ai-image'}.${ext}`, { type: blob.type || 'image/png' })
+  return uploadImage(file)
+}
+
+/* ── AI generation (server endpoints — keys stay server-side) ── */
+export interface GeneratedArticle {
+  title: string
+  slug?: string
+  excerpt: string
+  meta_description: string
+  focus_keyword?: string
+  category?: string
+  tags?: string[]
+  body: string
+  image_prompts?: string[]
+}
+
+export async function generateArticle(input: { topic?: string; keyword?: string }): Promise<GeneratedArticle> {
+  const res = await fetch('/api/generate-article', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Article generation failed')
+  return data as GeneratedArticle
+}
+
+export async function getImagePrompts(fields: { title?: string | null; excerpt?: string | null; body?: string | null }): Promise<string[]> {
+  const res = await fetch('/api/image-prompts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Could not build image prompts')
+  return (data.prompts || []) as string[]
+}
+
+/** Generate one image → returns a usable image URL (data: URL for base64). */
+export async function generateImage(prompt: string, size?: string): Promise<string> {
+  const res = await fetch('/api/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, size }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Image generation failed')
+  if (data.b64) return `data:image/png;base64,${data.b64}`
+  if (data.url) return data.url as string
+  throw new Error('No image returned')
+}
+
 /* ── Helpers ── */
 export function slugify(s: string): string {
   return s
