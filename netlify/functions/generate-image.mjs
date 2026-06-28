@@ -15,6 +15,7 @@ export default async (req) => {
   const env = {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENAI_IMAGE_MODEL: process.env.OPENAI_IMAGE_MODEL,
+    PEXELS_API_KEY: process.env.PEXELS_API_KEY,
   }
   try {
     const out = await generateImage(env, body)

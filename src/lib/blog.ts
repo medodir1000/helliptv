@@ -220,9 +220,26 @@ export interface GeneratedArticle {
   tags?: string[]
   body: string
   image_prompts?: string[]
+  image_queries?: string[]
 }
 
-export async function generateArticle(input: { topic?: string; keyword?: string }): Promise<GeneratedArticle> {
+/** Published posts (slug + title) the generator can link to internally. */
+export async function listPublishedLinks(): Promise<{ slug: string; title: string }[]> {
+  const { data, error } = await supabase
+    .from('landing_posts')
+    .select('slug,title')
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(30)
+  if (error) return []
+  return (data ?? []) as { slug: string; title: string }[]
+}
+
+export async function generateArticle(input: {
+  topic?: string
+  keyword?: string
+  links?: { slug: string; title: string }[]
+}): Promise<GeneratedArticle> {
   const res = await fetch('/api/generate-article', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -244,16 +261,17 @@ export async function getImagePrompts(fields: { title?: string | null; excerpt?:
   return (data.prompts || []) as string[]
 }
 
-/** Generate one image → returns a usable image URL (data: URL for base64). */
-export async function generateImage(prompt: string, size?: string): Promise<string> {
+/** Generate one image → returns a usable image URL (data: URL for base64).
+ *  `prompt` = scene for AI gen; `query` = short stock-photo search terms (Pexels). */
+export async function generateImage(prompt: string, query?: string, size?: string): Promise<string> {
   const res = await fetch('/api/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, size }),
+    body: JSON.stringify({ prompt, query, size }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || 'Image generation failed')
-  if (data.b64) return `data:image/png;base64,${data.b64}`
+  if (data.b64) return `data:${data.mime || 'image/png'};base64,${data.b64}`
   if (data.url) return data.url as string
   throw new Error('No image returned')
 }

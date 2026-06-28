@@ -7,7 +7,7 @@ import { supabase, hasSupabase } from '../lib/supabase'
 import {
   listAllPosts, getPostById, createPost, updatePost, deletePost, uploadImage,
   slugify, estimateReadMinutes, translateArticle, saveTranslation, getTranslatedLangs,
-  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl,
+  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl, listPublishedLinks,
   type Post, type PostInput, type PostStatus,
 } from '../lib/blog'
 import { TRANSLATE_LANGS } from '../lib/i18n'
@@ -256,6 +256,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   const [aiBusy, setAiBusy] = useState<'article' | 'images' | 'all' | null>(null)
   const [aiStatus, setAiStatus] = useState<string | null>(null)
   const [imgPrompts, setImgPrompts] = useState<string[] | null>(null)
+  const [imgQueries, setImgQueries] = useState<string[] | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -290,9 +291,10 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   /* AI: write a full structured article, then auto-format it. */
   const genArticle = async () => {
     const topic = (aiTopic || form.title || '').trim()
-    setAiBusy('article'); setError(null); setAiStatus('Writing the article… (~20s)')
+    setAiBusy('article'); setError(null); setAiStatus('Writing a long, SEO article with internal links… (~30s)')
     try {
-      const a = await generateArticle({ topic, keyword: form.focus_keyword || '' })
+      const links = (await listPublishedLinks()).filter((l) => l.slug !== form.slug)
+      const a = await generateArticle({ topic, keyword: form.focus_keyword || '', links })
       const body = formatArticle(a.body || '', a.focus_keyword || form.focus_keyword || '')
       setForm((f) => ({
         ...f,
@@ -306,7 +308,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
         tags: a.tags?.length ? a.tags : f.tags,
       }))
       if (a.tags?.length) setTagsText(a.tags.join(', '))
-      if (a.image_prompts?.length) setImgPrompts(a.image_prompts.slice(0, 3))
+      if (a.image_prompts?.length) { setImgPrompts(a.image_prompts.slice(0, 3)); setImgQueries(a.image_queries?.slice(0, 3) || null) }
       setAiStatus(null)
     } catch (e: any) {
       setError(e?.message || 'Article generation failed'); setAiStatus(null)
@@ -320,15 +322,17 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
     setAiBusy('images'); setError(null)
     try {
       let prompts = imgPrompts
+      let queries = imgQueries
       if (!prompts?.length) {
         setAiStatus('Thinking up 3 scenes…')
         prompts = await getImagePrompts({ title: form.title, excerpt: form.excerpt, body: form.body })
+        queries = null
       }
       const hadCover = !!form.cover_image
       const urls: string[] = []
       for (let i = 0; i < prompts.length; i++) {
-        setAiStatus(`Generating image ${i + 1}/${prompts.length}… (~20s each)`)
-        const dataUrl = await generateImage(prompts[i])
+        setAiStatus(`Generating image ${i + 1}/${prompts.length}…`)
+        const dataUrl = await generateImage(prompts[i], queries?.[i])
         setAiStatus(`Uploading image ${i + 1}/${prompts.length}…`)
         urls.push(await uploadImageFromUrl(dataUrl, `${slugify(form.title || 'image')}-${i + 1}`))
       }
@@ -339,7 +343,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
         cover_image: f.cover_image || urls[0],
         body: insertImages(f.body || '', bodyUrls.map((u, i) => ({ url: u, alt: bodyAlts[i] }))),
       }))
-      setImgPrompts(null)
+      setImgPrompts(null); setImgQueries(null)
       setAiStatus(null)
     } catch (e: any) {
       setError(e?.message || 'Image generation failed'); setAiStatus(null)
@@ -354,8 +358,9 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
     setAiBusy('all'); setError(null)
     let articleDone = false
     try {
-      setAiStatus('Writing a long, SEO-optimized article… (~30s)')
-      const a = await generateArticle({ topic, keyword: form.focus_keyword || '' })
+      setAiStatus('Writing a long, SEO article with internal links… (~30s)')
+      const links = (await listPublishedLinks()).filter((l) => l.slug !== form.slug)
+      const a = await generateArticle({ topic, keyword: form.focus_keyword || '', links })
       const body0 = formatArticle(a.body || '', a.focus_keyword || form.focus_keyword || '')
       setForm((f) => ({
         ...f,
@@ -374,10 +379,11 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       const prompts = a.image_prompts?.length
         ? a.image_prompts.slice(0, 3)
         : await getImagePrompts({ title: a.title, excerpt: a.excerpt, body: a.body })
+      const queries = a.image_queries?.slice(0, 3) || []
       const urls: string[] = []
       for (let i = 0; i < prompts.length; i++) {
-        setAiStatus(`Generating image ${i + 1}/${prompts.length}… (~20s each)`)
-        const dataUrl = await generateImage(prompts[i])
+        setAiStatus(`Generating image ${i + 1}/${prompts.length}…`)
+        const dataUrl = await generateImage(prompts[i], queries[i])
         urls.push(await uploadImageFromUrl(dataUrl, `${slugify(a.title || 'image')}-${i + 1}`))
       }
       setForm((f) => ({
@@ -388,7 +394,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       setAiStatus(null)
     } catch (e: any) {
       const msg = e?.message || 'Generation failed'
-      setError(articleDone ? `Article created ✓ — images failed: ${msg}. Fix the OpenAI key, then click “Images only”.` : msg)
+      setError(articleDone ? `Article created ✓ — but images failed: ${msg}` : msg)
       setAiStatus(null)
     }
     setAiBusy(null)
