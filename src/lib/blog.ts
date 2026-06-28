@@ -44,6 +44,31 @@ export async function getPublishedPosts(limit?: number): Promise<Post[]> {
   return (data ?? []) as Post[]
 }
 
+export async function getRelatedPosts(excludeSlug: string, category: string | null, limit = 3): Promise<Post[]> {
+  const out: Post[] = []
+  const seen = new Set<string>([excludeSlug])
+  const pull = async (cat: string | null) => {
+    let q = supabase
+      .from('landing_posts')
+      .select(LIST_COLS)
+      .eq('status', 'published')
+      .neq('slug', excludeSlug)
+      .order('published_at', { ascending: false })
+      .limit(limit + 3)
+    if (cat) q = q.eq('category', cat)
+    const { data } = await q
+    for (const p of (data ?? []) as Post[]) {
+      if (!seen.has(p.slug) && out.length < limit) {
+        out.push(p)
+        seen.add(p.slug)
+      }
+    }
+  }
+  if (category) await pull(category) // prefer same category
+  if (out.length < limit) await pull(null) // fill with latest
+  return out
+}
+
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   const { data, error } = await supabase
     .from('landing_posts')

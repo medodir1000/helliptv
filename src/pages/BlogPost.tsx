@@ -9,7 +9,7 @@ import { Aurora } from '../components/ui/Aurora'
 import { FinalCTA } from '../components/FinalCTA'
 import { Reveal } from '../components/anim/Reveal'
 import { useSeo } from '../hooks/useSeo'
-import { getPostBySlug, type Post } from '../lib/blog'
+import { getPostBySlug, getRelatedPosts, type Post } from '../lib/blog'
 import { WA } from '../lib/whatsapp'
 
 function fmtDate(s: string | null) {
@@ -21,6 +21,7 @@ export function BlogPost() {
   const { slug } = useParams()
   const [post, setPost] = useState<Post | null | undefined>(undefined) // undefined = loading
   const [error, setError] = useState<string | null>(null)
+  const [related, setRelated] = useState<Post[]>([])
 
   useEffect(() => {
     if (!slug) return
@@ -60,6 +61,14 @@ export function BlogPost() {
     el.textContent = JSON.stringify(ld)
     document.head.appendChild(el)
     return () => document.getElementById('blog-jsonld')?.remove()
+  }, [post])
+
+  // Related posts (internal links + dwell time)
+  useEffect(() => {
+    if (!post) return
+    getRelatedPosts(post.slug, post.category, 3)
+      .then(setRelated)
+      .catch(() => {})
   }, [post])
 
   if (post === null || error) {
@@ -167,6 +176,29 @@ export function BlogPost() {
           </div>
         </div>
       </article>
+
+      {related.length > 0 && (
+        <section className="border-t border-line bg-canvas-2">
+          <div className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
+            <h2 className="font-display text-xl font-bold text-fg sm:text-2xl">Keep reading</h2>
+            <div className="mt-6 grid gap-5 sm:grid-cols-3">
+              {related.map((r) => (
+                <Link
+                  key={r.id}
+                  to={`/blog/${r.slug}`}
+                  className="group rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-[0_20px_44px_-28px_rgba(17,19,28,0.45)]"
+                >
+                  {r.category && <span className="text-xs font-semibold uppercase tracking-wider text-neon">{r.category}</span>}
+                  <p className="mt-1.5 font-display text-base font-bold leading-snug text-fg transition-colors group-hover:text-neon">
+                    {r.title}
+                  </p>
+                  {r.excerpt && <p className="mt-2 line-clamp-2 text-sm text-muted">{r.excerpt}</p>}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <FinalCTA />
     </>
