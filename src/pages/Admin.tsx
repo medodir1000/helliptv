@@ -9,6 +9,7 @@ import {
 } from '../lib/blog'
 import { Icon } from '../components/ui/Icon'
 import { Logo } from '../components/ui/Logo'
+import { formatArticle } from '../lib/format'
 import { useSeo } from '../hooks/useSeo'
 
 const input = 'w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-fg outline-none transition-colors focus:border-neon focus:ring-2 focus:ring-neon/20'
@@ -238,8 +239,16 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
               {(['write', 'preview'] as const).map((t) => (
                 <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1 text-xs font-semibold capitalize ${tab === t ? 'bg-neon/10 text-neon' : 'text-faint hover:text-fg'}`}>{t}</button>
               ))}
+              <button
+                type="button"
+                onClick={() => set({ body: formatArticle(form.body || '', form.focus_keyword || '') })}
+                title="Tidy spacing, punctuation & headings, and bold the focus keyword"
+                className="ml-1 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-neon hover:bg-neon/10"
+              >
+                <Icon name="sparkles" size={12} /> Format
+              </button>
               <input ref={bodyInput} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], 'body')} />
-              <button type="button" onClick={() => bodyInput.current?.click()} className="ml-1 rounded-lg px-3 py-1 text-xs font-semibold text-faint hover:text-fg">+ Image</button>
+              <button type="button" onClick={() => bodyInput.current?.click()} className="rounded-lg px-3 py-1 text-xs font-semibold text-faint hover:text-fg">+ Image</button>
             </div>
           </div>
           {tab === 'write' ? (
