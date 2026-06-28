@@ -154,7 +154,7 @@ export async function generateImage(env, { prompt, query, size } = {}) {
 
 async function imageToB64(url) {
   let r
-  try { r = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (HellIPTV blog image fetch)' } }) }
+  try { r = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (HellIPTV blog image fetch)' }, signal: AbortSignal.timeout(9000) }) }
   catch (e) { throw new Error(`fetch failed: ${e?.message || e}`) }
   if (!r.ok) throw new Error(`fetch ${r.status}`)
   const mime = (r.headers.get('content-type') || 'image/jpeg').split(';')[0]
@@ -216,26 +216,37 @@ async function viaPexels(key, query) {
 }
 
 async function viaOpenverse(query) {
-  const q = String(query || 'television streaming').replace(/[^a-z0-9 ]/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'television'
-  // license_type=commercial → broader pool that allows commercial use; prefer the
-  // proxied thumbnail (sized JPEG) so we never choke on a multi-MB original.
-  const r = await fetch(
-    `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=20&license_type=commercial&mature=false`,
-    { headers: { 'User-Agent': 'HellIPTV/1.0 (+https://helliptv.com)' } },
-  )
-  if (!r.ok) throw new Error(`Openverse (${r.status})`)
-  const data = await r.json()
-  const results = (data?.results || []).filter((x) => x?.thumbnail || x?.url)
+  const clean = String(query || 'television').replace(/[^a-z0-9 ]/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  const words = clean.split(' ').filter(Boolean)
+  // Specific multi-word queries return 0 CC results → fall back to broader terms.
+  const tries = [...new Set([clean, words.slice(-2).join(' '), words.slice(-1).join(' '), 'television living room'].filter(Boolean))]
+  let results = []
+  for (const q of tries) {
+    let r
+    try {
+      r = await fetch(
+        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=30&license_type=commercial&mature=false`,
+        { headers: { 'User-Agent': 'HellIPTV/1.0 (+https://helliptv.com)' }, signal: AbortSignal.timeout(8000) },
+      )
+    } catch { continue }
+    if (!r.ok) continue
+    const data = await r.json()
+    results = (data?.results || []).filter((x) => x?.url || x?.thumbnail)
+    if (results.length) break
+  }
   if (!results.length) throw new Error('no results')
   const start = Math.floor((Date.now() / 700) % results.length)
-  for (let k = 0; k < Math.min(10, results.length); k++) {
+  for (let k = 0; k < Math.min(14, results.length); k++) {
     const pick = results[(start + k) % results.length]
-    // proxied thumbnail first (always sized & alive), full-size as fallback
-    for (const src of [pick.thumbnail, pick.url].filter(Boolean)) {
-      try { return { ...(await imageToB64(src)), source: 'openverse' } } catch { /* dead/huge → next */ }
+    for (const src of [pick.url, pick.thumbnail].filter(Boolean)) {
+      try {
+        const out = await imageToB64(src)
+        // skip tiny clipart/icons (e.g. a 3KB "TV icon"); real photos are larger
+        if (Buffer.byteLength(out.b64, 'base64') >= 14000) return { ...out, source: 'openverse' }
+      } catch { /* dead/huge → next */ }
     }
   }
-  throw new Error('all picks failed')
+  throw new Error('no usable photo')
 }
 
 async function viaPicsum(seedText) {

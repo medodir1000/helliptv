@@ -451,6 +451,18 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
     }
   }
 
+  const removeArticle = async () => {
+    if (!id) return
+    if (!confirm('Delete this article permanently? This cannot be undone.')) return
+    setBusy(true); setError(null)
+    try {
+      await deletePost(id)
+      onDone()
+    } catch (e: any) {
+      setError(e?.message ?? 'Delete failed'); setBusy(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <button onClick={onDone} className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
@@ -610,11 +622,16 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
 
         {error && <p className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <button disabled={busy} onClick={() => save('published')} className={btnPrimary}>
             <Icon name="check" size={16} /> {busy ? 'Saving…' : 'Publish'}
           </button>
           <button disabled={busy} onClick={() => save('draft')} className={btnGhost}>Save as draft</button>
+          {id && (
+            <button disabled={busy} onClick={removeArticle} className={`${btn} ml-auto border border-danger/40 text-danger hover:bg-danger/10`}>
+              <Icon name="close" size={16} /> Delete article
+            </button>
+          )}
         </div>
       </div>
     </div>
