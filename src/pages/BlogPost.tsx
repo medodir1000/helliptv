@@ -37,6 +37,31 @@ export function BlogPost() {
     image: post?.cover_image ?? undefined,
   })
 
+  // JSON-LD structured data (BlogPosting) — rich results + better understanding.
+  useEffect(() => {
+    if (!post) return
+    const ld = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.meta_description ?? post.excerpt ?? '',
+      image: post.cover_image ? [post.cover_image] : undefined,
+      datePublished: post.published_at ?? undefined,
+      dateModified: post.updated_at ?? post.published_at ?? undefined,
+      author: { '@type': 'Organization', name: post.author ?? 'HellIPTV' },
+      publisher: { '@type': 'Organization', name: 'HellIPTV' },
+      mainEntityOfPage: { '@type': 'WebPage', '@id': `https://helliptv.com/blog/${post.slug}` },
+      keywords: (post.tags ?? []).join(', ') || undefined,
+    }
+    document.getElementById('blog-jsonld')?.remove()
+    const el = document.createElement('script')
+    el.type = 'application/ld+json'
+    el.id = 'blog-jsonld'
+    el.textContent = JSON.stringify(ld)
+    document.head.appendChild(el)
+    return () => document.getElementById('blog-jsonld')?.remove()
+  }, [post])
+
   if (post === null || error) {
     return (
       <Section className="!py-32 text-center">

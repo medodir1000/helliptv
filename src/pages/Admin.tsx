@@ -53,8 +53,73 @@ function Login() {
   )
 }
 
+/* ───────────────────────────── SEO panel ─────────────────────────── */
+function seoChecks(f: PostInput) {
+  const kw = (f.focus_keyword || '').toLowerCase().trim()
+  const kwSlug = kw.replace(/\s+/g, '-')
+  const body = f.body || ''
+  const intro = body.slice(0, 300).toLowerCase()
+  const words = body.trim().split(/\s+/).filter(Boolean).length
+  const t = (f.title || '').length
+  const m = (f.meta_description || '').length
+  return [
+    { ok: !!kw && (f.title || '').toLowerCase().includes(kw), label: 'Focus keyword in the title' },
+    { ok: !!kw && intro.includes(kw), label: 'Keyword in the intro' },
+    { ok: !!kw && (f.slug || '').toLowerCase().includes(kwSlug), label: 'Keyword in the URL' },
+    { ok: !!kw && (f.meta_description || '').toLowerCase().includes(kw), label: 'Keyword in meta description' },
+    { ok: t >= 30 && t <= 60, label: `Title length (${t}/60)` },
+    { ok: m >= 120 && m <= 160, label: `Meta description (${m}/160)` },
+    { ok: words >= 300, label: `Body ${words} words (≥300)` },
+    { ok: /(^|\n)#{2,3}\s/.test(body), label: 'Has a subheading (##)' },
+    { ok: !!f.cover_image, label: 'Cover image set' },
+  ]
+}
+
+function SeoPanel({ form, onKeyword }: { form: PostInput; onKeyword: (v: string) => void }) {
+  const checks = seoChecks(form)
+  const score = checks.filter((c) => c.ok).length
+  const pct = Math.round((score / checks.length) * 100)
+  const color = pct >= 80 ? 'text-volt' : pct >= 50 ? 'text-warn' : 'text-danger'
+  const t = (form.title || '').length
+  const m = (form.meta_description || '').length
+
+  return (
+    <div className="mt-5 rounded-2xl border border-line bg-canvas/40 p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-faint">SEO assistant</span>
+        <span className={`text-sm font-bold ${color}`}>{score}/{checks.length} · {pct}%</span>
+      </div>
+
+      <label className={`${label} mt-3`}>Focus keyword</label>
+      <input value={form.focus_keyword ?? ''} onChange={(e) => onKeyword(e.target.value)} className={input} placeholder="e.g. watch world cup in 4k" />
+
+      <p className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wider text-faint">Google preview</p>
+      <div className="rounded-xl border border-line bg-surface p-3">
+        <p className="truncate text-xs text-[#4d5156]">helliptv.com › blog › {form.slug || '…'}</p>
+        <p className="truncate text-base text-[#1a0dab]">{form.title || 'Your title'} · HellIPTV</p>
+        <p className="line-clamp-2 text-sm text-[#4d5156]">{form.meta_description || 'Your meta description preview shows here…'}</p>
+      </div>
+      <div className="mt-2 flex gap-4 text-[11px]">
+        <span className={t > 60 ? 'text-danger' : 'text-faint'}>Title {t}/60</span>
+        <span className={m > 160 ? 'text-danger' : 'text-faint'}>Description {m}/160</span>
+      </div>
+
+      <ul className="mt-4 grid gap-1.5 sm:grid-cols-2">
+        {checks.map((c) => (
+          <li key={c.label} className={`flex items-center gap-2 text-[13px] ${c.ok ? 'text-fg' : 'text-faint'}`}>
+            <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-full ${c.ok ? 'bg-volt text-white' : 'bg-surface-2 text-faint'}`}>
+              <Icon name={c.ok ? 'check' : 'close'} size={10} />
+            </span>
+            {c.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /* ────────────────────────────── Editor ───────────────────────────── */
-const EMPTY: PostInput = { title: '', slug: '', excerpt: '', body: '', category: '', author: 'HellIPTV Team', tags: [], status: 'draft', cover_image: '', meta_description: '' }
+const EMPTY: PostInput = { title: '', slug: '', excerpt: '', body: '', category: '', author: 'HellIPTV Team', tags: [], status: 'draft', cover_image: '', meta_description: '', focus_keyword: '' }
 
 function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   const [form, setForm] = useState<PostInput>(EMPTY)
@@ -73,7 +138,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       setForm({
         title: p.title, slug: p.slug, excerpt: p.excerpt ?? '', body: p.body ?? '', category: p.category ?? '',
         author: p.author ?? 'HellIPTV Team', tags: p.tags ?? [], status: p.status, cover_image: p.cover_image ?? '',
-        meta_description: p.meta_description ?? '', published_at: p.published_at ?? null,
+        meta_description: p.meta_description ?? '', focus_keyword: p.focus_keyword ?? '', published_at: p.published_at ?? null,
       })
       setTagsText((p.tags ?? []).join(', '))
       setSlugLocked(true)
@@ -190,6 +255,8 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
           <label className={label}>Meta description (SEO)</label>
           <textarea value={form.meta_description ?? ''} onChange={(e) => set({ meta_description: e.target.value })} rows={2} className={`${input} resize-y`} placeholder="~155 characters for Google" />
         </div>
+
+        <SeoPanel form={form} onKeyword={(v) => set({ focus_keyword: v })} />
 
         {error && <p className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 

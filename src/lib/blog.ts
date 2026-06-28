@@ -14,6 +14,7 @@ export interface Post {
   tags: string[] | null
   status: PostStatus
   meta_description: string | null
+  focus_keyword: string | null
   read_minutes: number | null
   published_at: string | null
   created_at: string
@@ -24,7 +25,7 @@ export type PostInput = Partial<
   Pick<
     Post,
     | 'slug' | 'title' | 'excerpt' | 'body' | 'cover_image' | 'category'
-    | 'author' | 'tags' | 'status' | 'meta_description' | 'read_minutes' | 'published_at'
+    | 'author' | 'tags' | 'status' | 'meta_description' | 'focus_keyword' | 'read_minutes' | 'published_at'
   >
 >
 
