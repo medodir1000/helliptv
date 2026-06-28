@@ -15,6 +15,12 @@
     Cross-Origin-Opener-Policy = "same-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), browsing-topics=()"
 
+# API → Netlify functions (must come BEFORE the SPA catch-all).
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
 # SPA fallback — every route is served by index.html so /blog, /blog/:slug,
 # /admin, /pricing … are handled client-side by React Router (must be LAST).
 [[redirects]]

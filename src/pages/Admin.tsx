@@ -5,8 +5,10 @@ import remarkGfm from 'remark-gfm'
 import { supabase, hasSupabase } from '../lib/supabase'
 import {
   listAllPosts, getPostById, createPost, updatePost, deletePost, uploadImage,
-  slugify, estimateReadMinutes, type Post, type PostInput, type PostStatus,
+  slugify, estimateReadMinutes, translateArticle, saveTranslation, getTranslatedLangs,
+  type Post, type PostInput, type PostStatus,
 } from '../lib/blog'
+import { TRANSLATE_LANGS } from '../lib/i18n'
 import { Icon } from '../components/ui/Icon'
 import { Logo } from '../components/ui/Logo'
 import { formatArticle } from '../lib/format'
@@ -115,6 +117,82 @@ function SeoPanel({ form, onKeyword }: { form: PostInput; onKeyword: (v: string)
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/* ─────────────────────────── Translations ────────────────────────── */
+function TranslationsPanel({ id, form }: { id: string; form: PostInput }) {
+  const [done, setDone] = useState<string[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getTranslatedLangs(id).then(setDone).catch(() => {})
+  }, [id])
+
+  const fields = () => ({
+    title: form.title,
+    excerpt: form.excerpt,
+    meta_description: form.meta_description,
+    body: form.body,
+  })
+
+  const run = async (code: string, name: string) => {
+    const t = await translateArticle(fields(), name)
+    await saveTranslation(id, code, t)
+    setDone((d) => [...new Set([...d, code])])
+  }
+
+  const one = async (l: { code: string; name: string }) => {
+    setBusy(l.code); setError(null)
+    try { await run(l.code, l.name) } catch (e: any) { setError(`${l.code}: ${e?.message || 'failed'}`) }
+    setBusy(null)
+  }
+
+  const all = async () => {
+    setBusy('all'); setError(null)
+    for (const l of TRANSLATE_LANGS) {
+      try { await run(l.code, l.name) } catch (e: any) { setError(`${l.code}: ${e?.message || 'failed'}`); break }
+    }
+    setBusy(null)
+  }
+
+  return (
+    <div className="mt-5 rounded-2xl border border-line bg-canvas/40 p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-faint">
+          Translations · {done.length}/{TRANSLATE_LANGS.length}
+        </span>
+        <button type="button" disabled={!!busy} onClick={all} className={`${btnPrimary} px-3 py-1.5 text-xs`}>
+          {busy === 'all' ? 'Translating…' : 'Translate all'}
+        </button>
+      </div>
+      <p className="mt-1.5 text-xs text-faint">Translates the current article (Gemini). Click a language to (re)do just that one.</p>
+      {error && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {TRANSLATE_LANGS.map((l) => {
+          const ok = done.includes(l.code)
+          return (
+            <button
+              key={l.code}
+              type="button"
+              disabled={!!busy}
+              onClick={() => one(l)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                ok ? 'border-volt/40 bg-volt/10 text-volt' : 'border-line text-muted hover:border-neon/40'
+              }`}
+            >
+              {busy === l.code ? (
+                <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+              ) : ok ? (
+                <Icon name="check" size={11} />
+              ) : null}
+              {l.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -266,6 +344,8 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
         </div>
 
         <SeoPanel form={form} onKeyword={(v) => set({ focus_keyword: v })} />
+
+        {id && <TranslationsPanel id={id} form={form} />}
 
         {error && <p className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 

@@ -113,6 +113,52 @@ export async function deletePost(id: string): Promise<void> {
   if (error) throw error
 }
 
+/* ── Translations (Gemini via /api/translate + landing_post_translations) ── */
+export interface Translation {
+  title: string
+  excerpt: string
+  meta_description: string
+  body: string
+}
+
+export async function translateArticle(
+  fields: { title?: string; excerpt?: string; meta_description?: string; body?: string },
+  language: string,
+): Promise<Translation> {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...fields, language }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Translation failed')
+  return data as Translation
+}
+
+export async function saveTranslation(post_id: string, lang: string, t: Translation): Promise<void> {
+  const { error } = await supabase
+    .from('landing_post_translations')
+    .upsert({ post_id, lang, ...t }, { onConflict: 'post_id,lang' })
+  if (error) throw error
+}
+
+export async function getTranslatedLangs(post_id: string): Promise<string[]> {
+  const { data, error } = await supabase.from('landing_post_translations').select('lang').eq('post_id', post_id)
+  if (error) throw error
+  return (data ?? []).map((r) => (r as { lang: string }).lang)
+}
+
+export async function getTranslation(post_id: string, lang: string): Promise<Translation | null> {
+  const { data, error } = await supabase
+    .from('landing_post_translations')
+    .select('title,excerpt,meta_description,body')
+    .eq('post_id', post_id)
+    .eq('lang', lang)
+    .maybeSingle()
+  if (error) throw error
+  return (data as Translation) ?? null
+}
+
 /* ── Image upload → public URL in the "landing-blog" bucket ── */
 export async function uploadImage(file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
