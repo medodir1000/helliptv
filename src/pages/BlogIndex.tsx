@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Section } from '../components/ui/Section'
 import { Icon } from '../components/ui/Icon'
+import { NotifyButton } from '../components/ui/NotifyButton'
 import { FinalCTA } from '../components/FinalCTA'
 import { useSeo } from '../hooks/useSeo'
 import { useHreflang } from '../hooks/useHreflang'
@@ -100,6 +101,9 @@ export function BlogIndex() {
       />
 
       <Section className="!pt-4">
+        <div className="mb-6 flex justify-center">
+          <NotifyButton lang={lang} />
+        </div>
         {error && (
           <p className="mx-auto max-w-md rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-center text-sm text-danger">
             {error}

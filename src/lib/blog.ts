@@ -345,6 +345,76 @@ export async function pingIndexNow(slug: string): Promise<{ ok: boolean; submitt
   }
 }
 
+/* ── Web push (bring readers back on new posts) ── */
+const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || ''
+
+function urlB64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(b64)
+  const arr = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
+  return arr
+}
+
+export function pushSupported(): boolean {
+  return typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC
+}
+
+export async function getPushState(): Promise<'subscribed' | 'default' | 'denied' | 'unsupported'> {
+  if (!pushSupported()) return 'unsupported'
+  if (Notification.permission === 'denied') return 'denied'
+  try {
+    const reg = await navigator.serviceWorker.getRegistration()
+    const sub = reg ? await reg.pushManager.getSubscription() : null
+    return sub ? 'subscribed' : 'default'
+  } catch {
+    return 'default'
+  }
+}
+
+export async function subscribeToPush(lang = 'en'): Promise<'subscribed' | 'denied' | 'unsupported' | 'error'> {
+  if (!pushSupported()) return 'unsupported'
+  try {
+    let reg = await navigator.serviceWorker.getRegistration()
+    if (!reg) reg = await navigator.serviceWorker.register('/sw.js')
+    await navigator.serviceWorker.ready
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return permission === 'denied' ? 'denied' : 'error'
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC) })
+    }
+    const json: any = sub.toJSON()
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .insert({ endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth, lang })
+    if (error && !/duplicate|unique|conflict/i.test(error.message || '')) return 'error'
+    return 'subscribed' // duplicate = already subscribed = fine
+  } catch {
+    return 'error'
+  }
+}
+
+/** Admin: push a new post to every subscriber. */
+export async function sendPushToAll(payload: {
+  title: string
+  body?: string
+  url?: string
+  image?: string
+}): Promise<{ sent: number; failed: number }> {
+  const { data: subs } = await supabase.from('push_subscriptions').select('endpoint,p256dh,auth')
+  if (!subs?.length) return { sent: 0, failed: 0 }
+  const res = await fetch('/api/send-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscriptions: subs, payload }),
+  })
+  const out = await res.json().catch(() => ({ sent: 0, failed: 0 }))
+  if (out.gone?.length) await supabase.from('push_subscriptions').delete().in('endpoint', out.gone)
+  return { sent: out.sent ?? 0, failed: out.failed ?? 0 }
+}
+
 /* ── Helpers ── */
 export function slugify(s: string): string {
   return s

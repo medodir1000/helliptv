@@ -7,7 +7,7 @@ import { supabase, hasSupabase } from '../lib/supabase'
 import {
   listAllPosts, getPostById, createPost, updatePost, deletePost, uploadImage,
   slugify, estimateReadMinutes, translateArticle, saveTranslation, getTranslatedLangs,
-  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl, listPublishedLinks, pingIndexNow,
+  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl, listPublishedLinks, pingIndexNow, sendPushToAll,
   type Post, type PostInput, type PostStatus,
 } from '../lib/blog'
 import { TRANSLATE_LANGS } from '../lib/i18n'
@@ -246,6 +246,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
   const [form, setForm] = useState<PostInput>(EMPTY)
   const [tagsText, setTagsText] = useState('')
   const [slugLocked, setSlugLocked] = useState(false)
+  const [wasPublished, setWasPublished] = useState(false)
   const [tab, setTab] = useState<'write' | 'preview'>('write')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -269,6 +270,7 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       })
       setTagsText((p.tags ?? []).join(', '))
       setSlugLocked(true)
+      setWasPublished(p.status === 'published')
     })
   }, [id])
 
@@ -444,8 +446,21 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       }
       if (id) await updatePost(id, payload)
       else await createPost(payload)
-      // Instant indexing: ping IndexNow with all language URLs on publish (non-fatal).
-      if (status === 'published' && payload.slug) { try { await pingIndexNow(payload.slug) } catch { /* ignore */ } }
+      if (status === 'published' && payload.slug) {
+        // Instant indexing on publish (non-fatal).
+        try { await pingIndexNow(payload.slug) } catch { /* ignore */ }
+        // Push subscribers only when a post goes live for the first time (not on edits).
+        if (!wasPublished) {
+          try {
+            await sendPushToAll({
+              title: payload.title || 'New on HellIPTV',
+              body: payload.excerpt || 'A new article just dropped.',
+              url: `/blog/${payload.slug}`,
+              image: payload.cover_image || undefined,
+            })
+          } catch { /* ignore */ }
+        }
+      }
       onDone()
     } catch (e: any) {
       setError(e?.message ?? 'Save failed')

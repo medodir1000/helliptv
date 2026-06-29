@@ -6,6 +6,7 @@ import { getFixtures } from './server/sportsFixtures'
 import { translateFields } from './server/translate.mjs'
 import { generateArticle, imagePrompts, generateImage } from './server/generate.mjs'
 import { submitIndexNow, postUrls } from './server/indexnow.mjs'
+import { sendPush } from './server/push.mjs'
 
 /* ────────────────────────────────────────────────────────────────
    Shared helpers (server-side only — never bundled to the client)
@@ -119,6 +120,17 @@ function apiDevServer(env: Record<string, string>): Plugin {
           sendJson(res, 200, await submitIndexNow(urls))
         } catch (err: any) {
           sendJson(res, 500, { error: err?.message || 'IndexNow submit failed' })
+        }
+      })
+
+      // ── POST /api/send-push (notify subscribers of a new post) ──
+      server.middlewares.use('/api/send-push', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJsonBody(req)
+          sendJson(res, 200, await sendPush(merged, body.subscriptions, body.payload))
+        } catch (err: any) {
+          sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Push send failed' })
         }
       })
     },
