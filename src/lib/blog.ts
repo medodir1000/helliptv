@@ -262,17 +262,31 @@ export async function getImagePrompts(fields: { title?: string | null; excerpt?:
 }
 
 /** Generate one image → returns a usable image URL (data: URL for base64).
- *  `prompt` = scene for AI gen; `query` = short stock-photo search terms (Pexels). */
+ *  `prompt` = scene for AI gen; `query` = short stock-photo search terms.
+ *  DEV (localhost) uses the Vite middleware (.env keys). PROD (live) uses the
+ *  Supabase Edge Function (no Netlify 10s timeout) — its OpenAI key is a Supabase secret. */
 export async function generateImage(prompt: string, query?: string, size?: string): Promise<string> {
-  const res = await fetch('/api/generate-image', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, query, size }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data?.error || 'Image generation failed')
-  if (data.b64) return `data:${data.mime || 'image/png'};base64,${data.b64}`
-  if (data.url) return data.url as string
+  let data: any
+  if (import.meta.env.PROD) {
+    const { data: out, error } = await supabase.functions.invoke('generate-image', { body: { prompt, query, size } })
+    if (error) {
+      let msg = error.message || 'Image generation failed'
+      try { const b = await (error as any)?.context?.json?.(); if (b?.error) msg = b.error } catch { /* keep msg */ }
+      throw new Error(msg)
+    }
+    data = out
+  } else {
+    const res = await fetch('/api/generate-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, query, size }),
+    })
+    data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data?.error || 'Image generation failed')
+  }
+  if (data?.error) throw new Error(data.error)
+  if (data?.b64) return `data:${data.mime || 'image/png'};base64,${data.b64}`
+  if (data?.url) return data.url as string
   throw new Error('No image returned')
 }
 
