@@ -240,13 +240,27 @@ export async function generateArticle(input: {
   keyword?: string
   links?: { slug: string; title: string }[]
 }): Promise<GeneratedArticle> {
-  const res = await fetch('/api/generate-article', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data?.error || 'Article generation failed')
+  // PROD (live) → Supabase Edge Function (no Netlify ~26s timeout; long articles fit).
+  // DEV (localhost) → Vite middleware (.env keys).
+  let data: any
+  if (import.meta.env.PROD) {
+    const { data: out, error } = await supabase.functions.invoke('generate-article', { body: input })
+    if (error) {
+      let msg = error.message || 'Article generation failed'
+      try { const b = await (error as any)?.context?.json?.(); if (b?.error) msg = b.error } catch { /* keep msg */ }
+      throw new Error(msg)
+    }
+    data = out
+  } else {
+    const res = await fetch('/api/generate-article', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data?.error || 'Article generation failed')
+  }
+  if (data?.error) throw new Error(data.error)
   return data as GeneratedArticle
 }
 
