@@ -192,20 +192,46 @@ export async function getTranslation(post_id: string, lang: string): Promise<Tra
 }
 
 /* ── Image upload → public URL in the "landing-blog" bucket ── */
+
+/** Resize + re-encode to WebP so 2MB AI PNGs become ~150-300KB → fast pages (Core Web Vitals).
+ *  Falls back to the original on any failure or if WebP isn't smaller. */
+async function compressImage(input: Blob): Promise<{ blob: Blob; ext: string }> {
+  const rawExt = (input.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+  try {
+    if (!input.type.startsWith('image/') || /svg|gif/.test(input.type)) return { blob: input, ext: rawExt }
+    const bmp = await createImageBitmap(input)
+    const maxW = 1280
+    const scale = Math.min(1, maxW / bmp.width)
+    const w = Math.round(bmp.width * scale)
+    const h = Math.round(bmp.height * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
+    bmp.close?.()
+    const webp = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/webp', 0.82))
+    if (webp && webp.size < input.size) return { blob: webp, ext: 'webp' }
+  } catch {
+    /* fall back to original */
+  }
+  return { blob: input, ext: rawExt }
+}
+
 export async function uploadImage(file: File): Promise<string> {
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-  const safe = file.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)
+  const { blob, ext } = await compressImage(file)
+  const safe = (file.name || 'image').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)
   const path = `${safe || 'image'}-${Math.round(performance.now())}.${ext}`
-  const { error } = await supabase.storage.from('landing-blog').upload(path, file, { upsert: false, cacheControl: '31536000' })
+  const { error } = await supabase.storage
+    .from('landing-blog')
+    .upload(path, blob, { upsert: false, cacheControl: '31536000', contentType: blob.type || `image/${ext}` })
   if (error) throw error
   return supabase.storage.from('landing-blog').getPublicUrl(path).data.publicUrl
 }
 
-/* Download a data:/remote image URL and upload it to the bucket → public URL. */
+/* Download a data:/remote image URL and upload it (compressed to WebP) → public URL. */
 export async function uploadImageFromUrl(url: string, name = 'ai-image'): Promise<string> {
   const blob = await (await fetch(url)).blob()
-  const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
-  const file = new File([blob], `${slugify(name) || 'ai-image'}.${ext}`, { type: blob.type || 'image/png' })
+  const file = new File([blob], slugify(name) || 'ai-image', { type: blob.type || 'image/png' })
   return uploadImage(file)
 }
 

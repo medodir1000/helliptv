@@ -41,6 +41,7 @@ export function BlogPost() {
     description: post?.meta_description ?? post?.excerpt ?? 'HellIPTV blog',
     path: blogPath(lang, slug ?? ''),
     image: post?.cover_image ?? undefined,
+    type: 'article',
   })
   useHreflang(slug)
 
