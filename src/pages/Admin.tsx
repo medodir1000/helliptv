@@ -656,6 +656,118 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
 }
 
 /* ────────────────────────────── List ─────────────────────────────── */
+/* High-traffic IPTV blog topics — each targets a real search query. */
+const SUGGESTED_TOPICS = [
+  'Best IPTV service for Firestick in 2026',
+  'How to stop IPTV buffering: fixes that actually work',
+  'IPTV vs Cable TV: which saves you more in 2026',
+  'How to set up IPTV on Samsung & LG Smart TVs',
+  'Watch live football on IPTV: the complete guide',
+  'Best 4K IPTV setup for sports fans',
+  'IPTV on Apple TV: setup and best apps',
+  'How to use a VPN with IPTV (and why you should)',
+  'Xtream Codes vs M3U: what is the difference',
+  'Best IPTV for movies and series (VOD) in 2026',
+  'How to fix IPTV not working on Firestick',
+  'IPTV EPG guide: get a working TV guide',
+  'Best IPTV players for Android TV',
+  'How many devices can one IPTV subscription use',
+  'IPTV for families: parental controls & multi-screen',
+  'How to install and set up TiviMate',
+  'IPTV free trial: how to test before you buy',
+  'Best player settings for smooth, lag-free 4K IPTV',
+]
+
+/* Bulk "content factory" — generate many keyword-targeted drafts in one go. */
+function BulkGenerate({ onDone }: { onDone: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [topics, setTopics] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  const suggest = () => {
+    const picks = [...SUGGESTED_TOPICS].sort(() => Math.random() - 0.5).slice(0, 10)
+    setTopics((t) => (t.trim() ? t.trim() + '\n' : '') + picks.join('\n'))
+  }
+
+  const run = async () => {
+    const list = topics.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 25)
+    if (!list.length) return
+    setBusy(true)
+    let ok = 0
+    let fail = 0
+    let links: { slug: string; title: string }[] = []
+    try { links = await listPublishedLinks() } catch { /* ignore */ }
+    for (let i = 0; i < list.length; i++) {
+      setStatus(`Writing ${i + 1}/${list.length}: ${list[i].slice(0, 44)}…`)
+      try {
+        const a = await generateArticle({ topic: list[i], links })
+        const body = formatArticle(a.body || '', a.focus_keyword || '')
+        await createPost({
+          title: a.title || list[i],
+          slug: slugify(a.slug || a.title || list[i]),
+          excerpt: a.excerpt || '',
+          body,
+          meta_description: a.meta_description || '',
+          focus_keyword: a.focus_keyword || '',
+          category: a.category || 'Guides',
+          tags: a.tags?.length ? a.tags : [],
+          author: 'HellIPTV Team',
+          status: 'draft',
+          read_minutes: estimateReadMinutes(body),
+        })
+        ok++
+      } catch { fail++ }
+    }
+    setBusy(false)
+    setStatus(null)
+    setTopics('')
+    onDone()
+    alert(`Done — ${ok} draft${ok === 1 ? '' : 's'} created${fail ? `, ${fail} failed` : ''}.\n\nReview each one, add images if you like, then Publish — every publish auto-submits to IndexNow.`)
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className={`${btnGhost} text-sm`}>
+        <Icon name="sparkles" size={15} /> Bulk generate
+      </button>
+    )
+  }
+  return (
+    <div className="mb-6 rounded-2xl border border-neon/30 bg-neon/5 p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-neon">⚡ Content Studio — bulk generate</span>
+        <button onClick={() => setOpen(false)} className="text-faint hover:text-fg"><Icon name="close" size={16} /></button>
+      </div>
+      <p className="mt-1.5 text-xs text-faint">
+        One topic per line → a full SEO article (with internal links) is drafted for each. More quality articles = more keywords you rank for = more traffic.
+        <span className="text-muted"> They save as drafts — review &amp; publish the good ones (quality beats quantity).</span>
+      </p>
+      <textarea
+        value={topics}
+        onChange={(e) => setTopics(e.target.value)}
+        rows={6}
+        disabled={busy}
+        className={`${input} mt-3 resize-y font-mono-nums`}
+        placeholder={'Best IPTV for Firestick in 2026\nHow to stop IPTV buffering\nIPTV vs Cable: which is better'}
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" disabled={busy} onClick={suggest} className={`${btnGhost} text-sm`}>+ Suggest 10 topics</button>
+        <button type="button" disabled={busy || !topics.trim()} onClick={run} className={btnPrimary}>
+          <Icon name="sparkles" size={15} /> {busy ? 'Generating…' : `Generate ${topics.split('\n').filter((s) => s.trim()).length || ''} drafts`}
+        </button>
+        {status && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-neon">
+            <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+            {status}
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-[11px] text-faint">~30-60s per article — keep this tab open. Runs without a time limit on localhost.</p>
+    </div>
+  )
+}
+
 function PostList({ onEdit, onNew }: { onEdit: (id: string) => void; onNew: () => void }) {
   const [posts, setPosts] = useState<Post[] | null>(null)
   const load = useCallback(() => { listAllPosts().then(setPosts).catch(() => setPosts([])) }, [])
@@ -669,10 +781,11 @@ function PostList({ onEdit, onNew }: { onEdit: (id: string) => void; onNew: () =
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold text-fg">Posts</h1>
         <button onClick={onNew} className={btnPrimary}><Icon name="sparkles" size={16} /> New post</button>
       </div>
+      <div className="mb-6"><BulkGenerate onDone={load} /></div>
 
       {posts === null ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-3" />)}</div>
