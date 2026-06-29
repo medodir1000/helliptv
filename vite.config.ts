@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { getFixtures } from './server/sportsFixtures'
 import { translateFields } from './server/translate.mjs'
 import { generateArticle, imagePrompts, generateImage } from './server/generate.mjs'
+import { submitIndexNow, postUrls } from './server/indexnow.mjs'
 
 /* ────────────────────────────────────────────────────────────────
    Shared helpers (server-side only — never bundled to the client)
@@ -106,6 +107,18 @@ function apiDevServer(env: Record<string, string>): Plugin {
           sendJson(res, 200, out)
         } catch (err: any) {
           sendJson(res, err?.unconfigured ? 503 : 500, { error: err?.message || 'Image generation failed' })
+        }
+      })
+
+      // ── POST /api/indexnow (instant search-engine indexing on publish) ──
+      server.middlewares.use('/api/indexnow', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
+        try {
+          const body = await readJsonBody(req)
+          const urls = body.urls?.length ? body.urls : body.slug ? postUrls(body.slug) : []
+          sendJson(res, 200, await submitIndexNow(urls))
+        } catch (err: any) {
+          sendJson(res, 500, { error: err?.message || 'IndexNow submit failed' })
         }
       })
     },

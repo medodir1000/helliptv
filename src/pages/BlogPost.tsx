@@ -10,6 +10,7 @@ import { Aurora } from '../components/ui/Aurora'
 import { FinalCTA } from '../components/FinalCTA'
 import { Reveal } from '../components/anim/Reveal'
 import { useSeo } from '../hooks/useSeo'
+import { articleJsonLd } from '../lib/schema.mjs'
 import { useHreflang } from '../hooks/useHreflang'
 import { getPostBySlug, getRelatedPosts, type Post } from '../lib/blog'
 import { currentLang, blogPath, getLang, SITE_URL } from '../lib/i18n'
@@ -46,20 +47,18 @@ export function BlogPost() {
   // JSON-LD structured data (BlogPosting) — rich results + better understanding.
   useEffect(() => {
     if (!post) return
-    const ld = {
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: post.title,
+    const ld = articleJsonLd({
+      title: post.title,
       description: post.meta_description ?? post.excerpt ?? '',
-      image: post.cover_image ? [post.cover_image] : undefined,
+      body: post.body ?? '',
+      image: post.cover_image ?? undefined,
       datePublished: post.published_at ?? undefined,
       dateModified: post.updated_at ?? post.published_at ?? undefined,
-      author: { '@type': 'Organization', name: post.author ?? 'HellIPTV' },
-      publisher: { '@type': 'Organization', name: 'HellIPTV' },
-      inLanguage: lang,
-      mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}${blogPath(lang, post.slug)}` },
-      keywords: (post.tags ?? []).join(', ') || undefined,
-    }
+      author: post.author ?? 'HellIPTV',
+      tags: post.tags ?? [],
+      lang,
+      url: `${SITE_URL}${blogPath(lang, post.slug)}`,
+    })
     document.getElementById('blog-jsonld')?.remove()
     const el = document.createElement('script')
     el.type = 'application/ld+json'

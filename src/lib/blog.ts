@@ -304,6 +304,21 @@ export async function generateImage(prompt: string, query?: string, size?: strin
   throw new Error('No image returned')
 }
 
+/** IndexNow — tell Bing/Yandex/Seznam (and indirectly Google) a post is new/updated
+ *  so it gets crawled in minutes. Submits the English + all localized URLs. */
+export async function pingIndexNow(slug: string): Promise<{ ok: boolean; submitted?: number; status?: number }> {
+  try {
+    const res = await fetch('/api/indexnow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug }),
+    })
+    return await res.json().catch(() => ({ ok: false }))
+  } catch {
+    return { ok: false }
+  }
+}
+
 /* ── Helpers ── */
 export function slugify(s: string): string {
   return s

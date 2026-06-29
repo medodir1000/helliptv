@@ -7,7 +7,7 @@ import { supabase, hasSupabase } from '../lib/supabase'
 import {
   listAllPosts, getPostById, createPost, updatePost, deletePost, uploadImage,
   slugify, estimateReadMinutes, translateArticle, saveTranslation, getTranslatedLangs,
-  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl, listPublishedLinks,
+  generateArticle, getImagePrompts, generateImage, uploadImageFromUrl, listPublishedLinks, pingIndexNow,
   type Post, type PostInput, type PostStatus,
 } from '../lib/blog'
 import { TRANSLATE_LANGS } from '../lib/i18n'
@@ -444,6 +444,8 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
       }
       if (id) await updatePost(id, payload)
       else await createPost(payload)
+      // Instant indexing: ping IndexNow with all language URLs on publish (non-fatal).
+      if (status === 'published' && payload.slug) { try { await pingIndexNow(payload.slug) } catch { /* ignore */ } }
       onDone()
     } catch (e: any) {
       setError(e?.message ?? 'Save failed')
@@ -461,6 +463,16 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
     } catch (e: any) {
       setError(e?.message ?? 'Delete failed'); setBusy(false)
     }
+  }
+
+  const submitToSearch = async () => {
+    if (!form.slug) { setError('Save the post first (it needs a slug).'); return }
+    setBusy(true); setError(null)
+    const r = await pingIndexNow(form.slug)
+    setBusy(false)
+    alert(r.ok
+      ? `✓ Submitted ${r.submitted ?? ''} URLs to IndexNow (Bing, Yandex, Seznam…). Google picks the signal up too — expect crawling within minutes.`
+      : `IndexNow submit failed (${r.status ?? 'network'}). Try again in a moment.`)
   }
 
   return (
@@ -627,6 +639,11 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
             <Icon name="check" size={16} /> {busy ? 'Saving…' : 'Publish'}
           </button>
           <button disabled={busy} onClick={() => save('draft')} className={btnGhost}>Save as draft</button>
+          {id && (
+            <button disabled={busy} onClick={submitToSearch} className={`${btnGhost} text-sm`} title="IndexNow — instant Bing / Yandex / Seznam indexing (Google picks it up too)">
+              <Icon name="sparkles" size={15} /> Submit to search engines
+            </button>
+          )}
           {id && (
             <button disabled={busy} onClick={removeArticle} className={`${btn} ml-auto border border-danger/40 text-danger hover:bg-danger/10`}>
               <Icon name="close" size={16} /> Delete article

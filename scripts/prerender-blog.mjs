@@ -7,6 +7,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { marked } from 'marked'
+import { articleJsonLd } from '../src/lib/schema.mjs'
 
 const url = process.env.VITE_SUPABASE_URL
 const key = process.env.VITE_SUPABASE_ANON_KEY
@@ -106,19 +107,18 @@ for (const p of posts) {
     const description = (tr?.meta_description || tr?.excerpt || p.meta_description || p.excerpt || '')
     const body = tr?.body || p.body || ''
     const canonical = `${SITE}${blogPath(code, p.slug)}`
-    const jsonld = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: title,
+    const jsonld = JSON.stringify(articleJsonLd({
+      title,
       description,
-      inLanguage: code,
-      image: p.cover_image ? [p.cover_image] : undefined,
+      body,
+      image: p.cover_image || undefined,
       datePublished: p.published_at || undefined,
       dateModified: p.updated_at || p.published_at || undefined,
-      author: { '@type': 'Organization', name: p.author || 'HellIPTV' },
-      publisher: { '@type': 'Organization', name: 'HellIPTV' },
-      mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
-    })
+      author: p.author || 'HellIPTV',
+      tags: p.tags || [],
+      lang: code,
+      url: canonical,
+    }))
     const bodyHtml = wrap(
       `<article class="prose prose-zinc">` +
         (p.cover_image ? `<img src="${esc(p.cover_image)}" alt="${esc(title)}" style="border-radius:1rem"/>` : '') +
