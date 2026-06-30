@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { marked } from 'marked'
 import { articleJsonLd } from '../src/lib/schema.mjs'
+import { cdnImg, cdnImgInBody } from '../src/lib/img.mjs'
 
 const url = process.env.VITE_SUPABASE_URL
 const key = process.env.VITE_SUPABASE_ANON_KEY
@@ -111,7 +112,7 @@ for (const p of posts) {
       title,
       description,
       body,
-      image: p.cover_image || undefined,
+      image: p.cover_image ? cdnImg(p.cover_image, 1200, 78) : undefined,
       datePublished: p.published_at || undefined,
       dateModified: p.updated_at || p.published_at || undefined,
       author: p.author || 'HellIPTV',
@@ -121,9 +122,9 @@ for (const p of posts) {
     }))
     const bodyHtml = wrap(
       `<article class="prose prose-zinc">` +
-        (p.cover_image ? `<img src="${esc(p.cover_image)}" alt="${esc(title)}" style="border-radius:1rem"/>` : '') +
+        (p.cover_image ? `<img src="${esc(cdnImg(p.cover_image, 1280, 76))}" alt="${esc(title)}" loading="lazy" style="border-radius:1rem"/>` : '') +
         `<h1>${esc(title)}</h1>` +
-        marked.parse(body) +
+        marked.parse(cdnImgInBody(body, 1280, 74)) +
         `</article>`,
       L?.dir,
     )
@@ -135,7 +136,7 @@ for (const p of posts) {
         title: `${title} · HellIPTV`,
         description,
         canonical,
-        image: p.cover_image || undefined,
+        image: p.cover_image ? cdnImg(p.cover_image, 1200, 78) : undefined,
         type: 'article',
         publishedTime: p.published_at || undefined,
         jsonld,

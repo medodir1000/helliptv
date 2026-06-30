@@ -11,6 +11,7 @@ import { useHreflang } from '../hooks/useHreflang'
 import { getPublishedPosts, type Post } from '../lib/blog'
 import { hasSupabase } from '../lib/supabase'
 import { currentLang, blogPath } from '../lib/i18n'
+import { cdnImg } from '../lib/img.mjs'
 import { fadeUp, inViewOnce, staggerContainer } from '../components/anim/motion'
 
 function fmtDate(s: string | null) {
@@ -28,7 +29,7 @@ function PostCard({ post, lang }: { post: Post; lang: string }) {
         <div className="relative aspect-[16/9] overflow-hidden bg-surface-3">
           {post.cover_image ? (
             <img
-              src={post.cover_image}
+              src={cdnImg(post.cover_image, 640, 68)}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"

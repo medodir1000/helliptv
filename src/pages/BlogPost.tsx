@@ -11,6 +11,7 @@ import { FinalCTA } from '../components/FinalCTA'
 import { Reveal } from '../components/anim/Reveal'
 import { useSeo } from '../hooks/useSeo'
 import { articleJsonLd } from '../lib/schema.mjs'
+import { cdnImg } from '../lib/img.mjs'
 import { useHreflang } from '../hooks/useHreflang'
 import { getPostBySlug, getRelatedPosts, type Post } from '../lib/blog'
 import { currentLang, blogPath, getLang, SITE_URL } from '../lib/i18n'
@@ -40,7 +41,7 @@ export function BlogPost() {
     title: post ? `${post.title}` : 'Article',
     description: post?.meta_description ?? post?.excerpt ?? 'HellIPTV blog',
     path: blogPath(lang, slug ?? ''),
-    image: post?.cover_image ?? undefined,
+    image: post?.cover_image ? cdnImg(post.cover_image, 1200, 78) : undefined,
     type: 'article',
   })
   useHreflang(slug)
@@ -52,7 +53,7 @@ export function BlogPost() {
       title: post.title,
       description: post.meta_description ?? post.excerpt ?? '',
       body: post.body ?? '',
-      image: post.cover_image ?? undefined,
+      image: post.cover_image ? cdnImg(post.cover_image, 1200, 78) : undefined,
       datePublished: post.published_at ?? undefined,
       dateModified: post.updated_at ?? post.published_at ?? undefined,
       author: post.author ?? 'HellIPTV',
@@ -136,7 +137,7 @@ export function BlogPost() {
         {post && post.cover_image && (
           <div className="mx-auto mt-8 max-w-4xl px-5 sm:px-8">
             <img
-              src={post.cover_image}
+              src={cdnImg(post.cover_image, 1280, 76)}
               alt={post.title}
               width={1280}
               height={720}
@@ -157,7 +158,18 @@ export function BlogPost() {
               dir={getLang(lang).dir}
               className="prose prose-zinc max-w-none prose-headings:font-display prose-headings:tracking-tight prose-a:text-neon prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-img:ring-1 prose-img:ring-line prose-blockquote:border-l-neon"
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{post.body ?? ''}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  img: ({ node, ...props }) => (
+                    // eslint-disable-next-line jsx-a11y/alt-text
+                    <img {...props} src={cdnImg(String(props.src || ''), 1280, 74)} loading="lazy" />
+                  ),
+                }}
+              >
+                {post.body ?? ''}
+              </ReactMarkdown>
             </div>
           )}
 
