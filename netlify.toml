@@ -4,6 +4,13 @@
   command = "npm run build"
   publish = "dist"
 
+# VAPID_SUBJECT is a public mailto, and the VITE_* keys are inlined into the client
+# bundle by design — none of these are secrets. Netlify's secret scanner was failing
+# EVERY deploy because VAPID_SUBJECT's value appears in committed files, so tell it to
+# skip the public keys. Real secrets (OPENROUTER_API_KEY, VAPID_PRIVATE_KEY) stay scanned.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "VAPID_SUBJECT,VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY,VITE_VAPID_PUBLIC_KEY"
+
 # Security headers (mirror of vercel.json, applied by Netlify).
 [[headers]]
   for = "/*"
