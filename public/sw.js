@@ -1,6 +1,6 @@
 /* HellIPTV service worker — lightweight offline shell.
    Network-first for navigations (always fresh), cache fallback when offline. */
-const CACHE = 'helliptv-v2'
+const CACHE = 'helliptv-v3'
 const SHELL = ['/', '/index.html', '/favicon-32.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -19,7 +19,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
 
-  // Never cache the AI endpoint.
+  // Only handle http(s) — chrome-extension://, data:, blob: etc. can't be cached.
+  if (!request.url.startsWith('http')) return
+
+  // Never cache the API endpoints.
   if (new URL(request.url).pathname.startsWith('/api/')) return
 
   if (request.mode === 'navigate') {
