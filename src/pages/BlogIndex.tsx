@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Section } from '../components/ui/Section'
 import { Icon } from '../components/ui/Icon'
@@ -12,7 +11,6 @@ import { getPublishedPosts, type Post } from '../lib/blog'
 import { hasSupabase } from '../lib/supabase'
 import { currentLang, blogPath } from '../lib/i18n'
 import { cdnImg } from '../lib/img.mjs'
-import { fadeUp, inViewOnce, staggerContainer } from '../components/anim/motion'
 
 function fmtDate(s: string | null) {
   if (!s) return ''
@@ -21,7 +19,7 @@ function fmtDate(s: string | null) {
 
 function PostCard({ post, lang }: { post: Post; lang: string }) {
   return (
-    <motion.article variants={fadeUp}>
+    <article>
       <Link
         to={blogPath(lang, post.slug)}
         className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-shadow hover:shadow-[0_24px_50px_-30px_rgba(17,19,28,0.45)]"
@@ -62,7 +60,7 @@ function PostCard({ post, lang }: { post: Post; lang: string }) {
           </div>
         </div>
       </Link>
-    </motion.article>
+    </article>
   )
 }
 
@@ -135,17 +133,11 @@ export function BlogIndex() {
         )}
 
         {posts && posts.length > 0 && (
-          <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="show"
-            viewport={inViewOnce}
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-          >
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((p) => (
               <PostCard key={p.id} post={p} lang={lang} />
             ))}
-          </motion.div>
+          </div>
         )}
       </Section>
 
