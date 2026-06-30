@@ -671,26 +671,40 @@ function Editor({ id, onDone }: { id: string | null; onDone: () => void }) {
 }
 
 /* ────────────────────────────── List ─────────────────────────────── */
-/* High-traffic IPTV blog topics — each targets a real search query. */
-const SUGGESTED_TOPICS = [
-  'Best IPTV service for Firestick in 2026',
-  'How to stop IPTV buffering: fixes that actually work',
-  'IPTV vs Cable TV: which saves you more in 2026',
-  'How to set up IPTV on Samsung & LG Smart TVs',
-  'Watch live football on IPTV: the complete guide',
-  'Best 4K IPTV setup for sports fans',
-  'IPTV on Apple TV: setup and best apps',
-  'How to use a VPN with IPTV (and why you should)',
-  'Xtream Codes vs M3U: what is the difference',
-  'Best IPTV for movies and series (VOD) in 2026',
-  'How to fix IPTV not working on Firestick',
-  'IPTV EPG guide: get a working TV guide',
-  'Best IPTV players for Android TV',
-  'How many devices can one IPTV subscription use',
-  'IPTV for families: parental controls & multi-screen',
-  'How to install and set up TiviMate',
-  'IPTV free trial: how to test before you buy',
-  'Best player settings for smooth, lag-free 4K IPTV',
+/* High-traffic IPTV topics, each targeting a real search query. `k` = distinctive
+   keywords used to skip a topic once you've already published an article on it,
+   so "Suggest" never re-proposes something that's already on the blog. */
+const SUGGESTED_TOPICS: { t: string; k: string[] }[] = [
+  { t: 'Best IPTV service for Firestick in 2026', k: ['firestick', 'fire tv', 'fire stick'] },
+  { t: 'How to use a VPN with IPTV (and why you should)', k: ['vpn'] },
+  { t: 'IPTV EPG guide: get a working TV guide', k: ['epg'] },
+  { t: 'How to install and set up TiviMate', k: ['tivimate'] },
+  { t: 'IPTV Smarters Pro: full setup guide', k: ['smarters'] },
+  { t: 'IPTV on Apple TV: setup and best apps', k: ['apple tv', 'appletv'] },
+  { t: 'Best IPTV players for Android TV & boxes', k: ['android'] },
+  { t: 'IPTV free trial: how to test before you buy', k: ['free trial'] },
+  { t: 'How many devices can one IPTV subscription use?', k: ['how many devices', 'connections', 'simultaneous'] },
+  { t: 'How to set up IPTV on Roku', k: ['roku'] },
+  { t: 'IPTV on Windows PC: best players & setup', k: ['windows pc', 'windows'] },
+  { t: 'How to watch IPTV on a Mac', k: ['on a mac', 'macos'] },
+  { t: 'How to watch IPTV on Kodi', k: ['kodi'] },
+  { t: 'Best internet speed for smooth 4K IPTV', k: ['internet speed'] },
+  { t: 'How to stop IPTV freezing and lag', k: ['freezing', ' lag'] },
+  { t: 'Catch-up TV & DVR on IPTV: how it works', k: ['catch-up', 'catchup', 'dvr'] },
+  { t: 'Is IPTV legal? What you need to know in 2026', k: ['legal'] },
+  { t: 'How to choose a reliable IPTV provider', k: ['reliable iptv provider', 'choose a'] },
+  { t: 'IPTV router & DNS settings for zero buffering', k: ['router', ' dns'] },
+  { t: 'Best IPTV setup for boxing & UFC PPV nights', k: ['boxing', 'ufc', 'ppv'] },
+  { t: 'How to watch the Premier League on IPTV', k: ['premier league'] },
+  { t: 'MAG box IPTV setup guide', k: ['mag box', 'mag-box'] },
+  { t: 'Formuler Z11 IPTV setup walkthrough', k: ['formuler'] },
+  { t: 'Best IPTV apps for 2026, ranked', k: ['best iptv apps', 'apps for 2026'] },
+  { t: 'How to start an IPTV reseller business', k: ['reseller'] },
+  { t: 'Multi-room IPTV: watch on every TV at home', k: ['multi-room', 'multiroom', 'multi room'] },
+  { t: 'How to activate IPTV on a new device', k: ['activate iptv', 'activation'] },
+  { t: 'GSE Smart IPTV setup guide', k: ['gse'] },
+  { t: 'How to reduce IPTV data usage', k: ['data usage'] },
+  { t: 'IPTV payment & subscription safety tips', k: ['payment', 'subscription safety'] },
 ]
 
 /* Bulk "content factory" — generate many keyword-targeted drafts in one go. */
@@ -700,8 +714,20 @@ function BulkGenerate({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
 
-  const suggest = () => {
-    const picks = [...SUGGESTED_TOPICS].sort(() => Math.random() - 0.5).slice(0, 10)
+  const suggest = async () => {
+    // Skip any topic you've already published (match its keywords against existing
+    // slugs + titles) AND anything already in the box, so suggestions stay fresh.
+    let existing = ''
+    try {
+      const links = await listPublishedLinks()
+      existing = links.map((l) => `${l.slug} ${l.title}`).join(' ').toLowerCase()
+    } catch { /* no DB reachable → just suggest from the full list */ }
+    const already = topics.toLowerCase()
+    const fresh = SUGGESTED_TOPICS.filter(
+      (x) => !x.k.some((kw) => existing.includes(kw)) && !already.includes(x.t.toLowerCase()),
+    )
+    const pool = fresh.length ? fresh : SUGGESTED_TOPICS
+    const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 10).map((x) => x.t)
     setTopics((t) => (t.trim() ? t.trim() + '\n' : '') + picks.join('\n'))
   }
 
