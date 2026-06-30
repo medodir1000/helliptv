@@ -27,7 +27,7 @@ function PostCard({ post, lang }: { post: Post; lang: string }) {
         <div className="relative aspect-[16/9] overflow-hidden bg-surface-3">
           {post.cover_image ? (
             <img
-              src={cdnImg(post.cover_image, 640, 68)}
+              src={cdnImg(post.cover_image, 768, 80)}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"

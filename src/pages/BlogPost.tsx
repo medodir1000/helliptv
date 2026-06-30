@@ -137,7 +137,7 @@ export function BlogPost() {
         {post && post.cover_image && (
           <div className="mx-auto mt-8 max-w-4xl px-5 sm:px-8">
             <img
-              src={cdnImg(post.cover_image, 1280, 76)}
+              src={cdnImg(post.cover_image, 1536, 84)}
               alt={post.title}
               width={1280}
               height={720}
@@ -164,7 +164,7 @@ export function BlogPost() {
                 components={{
                   img: ({ node, ...props }) => (
                     // eslint-disable-next-line jsx-a11y/alt-text
-                    <img {...props} src={cdnImg(String(props.src || ''), 1280, 74)} loading="lazy" />
+                    <img {...props} src={cdnImg(String(props.src || ''), 1440, 82)} loading="lazy" />
                   ),
                 }}
               >

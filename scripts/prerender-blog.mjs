@@ -122,9 +122,9 @@ for (const p of posts) {
     }))
     const bodyHtml = wrap(
       `<article class="prose prose-zinc">` +
-        (p.cover_image ? `<img src="${esc(cdnImg(p.cover_image, 1280, 76))}" alt="${esc(title)}" loading="lazy" style="border-radius:1rem"/>` : '') +
+        (p.cover_image ? `<img src="${esc(cdnImg(p.cover_image, 1536, 84))}" alt="${esc(title)}" loading="lazy" style="border-radius:1rem"/>` : '') +
         `<h1>${esc(title)}</h1>` +
-        marked.parse(cdnImgInBody(body, 1280, 74)) +
+        marked.parse(cdnImgInBody(body, 1440, 82)) +
         `</article>`,
       L?.dir,
     )

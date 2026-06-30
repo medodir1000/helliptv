@@ -200,7 +200,7 @@ async function compressImage(input: Blob): Promise<{ blob: Blob; ext: string }> 
   try {
     if (!input.type.startsWith('image/') || /svg|gif/.test(input.type)) return { blob: input, ext: rawExt }
     const bmp = await createImageBitmap(input)
-    const maxW = 1280
+    const maxW = 1600
     const scale = Math.min(1, maxW / bmp.width)
     const w = Math.round(bmp.width * scale)
     const h = Math.round(bmp.height * scale)
@@ -209,7 +209,7 @@ async function compressImage(input: Blob): Promise<{ blob: Blob; ext: string }> 
     canvas.height = h
     canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
     bmp.close?.()
-    const webp = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/webp', 0.82))
+    const webp = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/webp', 0.9))
     if (webp && webp.size < input.size) return { blob: webp, ext: 'webp' }
   } catch {
     /* fall back to original */
